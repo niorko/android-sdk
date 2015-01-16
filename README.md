@@ -1,4 +1,4 @@
-<h1>Android SDK</h1>
+<h1>Infinario Android SDK</h1>
 Infinario Android SDK is available in this Git repository: <a href="https://github.com/7segments/infinario-android-sdk">https://github.com/7segments/infinario-android-sdk</a>.
 <h2>Installation (Android Studio / Gradle)</h2>
 <ol>
