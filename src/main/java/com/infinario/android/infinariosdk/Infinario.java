@@ -48,7 +48,7 @@ public class Infinario {
         this.context = context;
 
         if (null != target) {
-            storeTarget(target);
+            storeTarget(target.replaceFirst("/*$", ""));
         }
 
         commandManager = new CommandManager(context, target);
@@ -374,7 +374,7 @@ public class Infinario {
      */
     @SuppressWarnings("unused")
     public void enablePushNotifications(String senderId) {
-        enablePushNotifications(senderId, -1);
+        enablePushNotifications(senderId, R.drawable.infinario_notification_icon);
     }
 
     /**
@@ -668,7 +668,7 @@ public class Infinario {
      * @return icon resource
      */
     private static int getIcon(Context context) {
-        return getPreferences(context).getInt(Contract.PROPERTY_ICON, -1);
+        return getPreferences(context).getInt(Contract.PROPERTY_ICON, R.drawable.infinario_notification_icon);
     }
 
     /**
