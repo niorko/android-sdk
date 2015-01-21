@@ -44,7 +44,7 @@ public class Contract {
      */
     public static final String CUSTOMER_ENDPOINT = "crm/customers";
     public static final String EVENT_ENDPOINT = "crm/events";
-    public static final String DEFAULT_TARGET = "https://api.7segments.com";
+    public static final String DEFAULT_TARGET = "https://api.infinario.com";
     public static final String PING_TARGET = "/system/time";
     public static final String BULK_URL = "/bulk";
 
