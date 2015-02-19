@@ -3,13 +3,10 @@ package com.infinario.android.infinariosdk;
 import android.content.Context;
 import android.util.Log;
 
-import org.apache.http.HttpResponse;
-import org.apache.http.util.EntityUtils;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-
-import java.io.IOException;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -19,16 +16,16 @@ import java.util.Set;
  */
 public class CommandManager {
 
-    private static final String BULK_URL = "/bulk";
-    private static final String TAG = "Infinario";
     private static final int MAX_RETRIES = 20;
 
     DbQueue queue;
     HttpHelper http;
+    Preferences preferences;
 
     public CommandManager(Context context, String target) {
         queue = new DbQueue(context);
         http = new HttpHelper(target);
+        preferences = Preferences.get(context);
     }
 
     public boolean schedule(Command command) {
@@ -36,14 +33,17 @@ public class CommandManager {
     }
 
     public boolean executeBatch() {
+        if (!preferences.ensureCookieId()) {
+            Log.d(Contract.TAG, "Failed to negotiate cookie ID");
+            return false;
+        }
+
         Set<Integer> failedRequests = new HashSet<>();
         Set<Integer> successfulRequests = new HashSet<>();
         JSONArray results;
         JSONArray commands = new JSONArray();
         JSONObject payload = new JSONObject();
         List<Request> requests = queue.pop();
-        HttpResponse response;
-        String body;
         JSONObject data;
         Request request;
         JSONObject result;
@@ -53,10 +53,10 @@ public class CommandManager {
             return false;
         }
 
-        Log.i(TAG, "sending ids " + requests.get(0).getId() + " - " + requests.get(requests.size() - 1).getId());
+        Log.i(Contract.TAG, "sending ids " + requests.get(0).getId() + " - " + requests.get(requests.size() - 1).getId());
 
         for (Request r : requests) {
-            commands.put(r.getCommand());
+            commands.put(setCookieId(setAge(r.getCommand())));
             failedRequests.add(r.getId());
         }
 
@@ -66,21 +66,9 @@ public class CommandManager {
             e.printStackTrace();
         }
 
-        response = http.post(BULK_URL, payload);
+        data = http.post(Contract.BULK_URL, payload);
 
-        try {
-            body = EntityUtils.toString(response.getEntity());
-        } catch (IOException e) {
-            body = null;
-        }
-
-        try {
-            data = new JSONObject(body);
-        } catch (JSONException e) {
-            data = null;
-        }
-
-        if (response.getStatusLine().getStatusCode() == 200 && data != null) {
+        if (data != null) {
             try {
                 results = data.getJSONArray("results");
             } catch (JSONException e) {
@@ -109,7 +97,7 @@ public class CommandManager {
 
         queue.clear(successfulRequests, failedRequests);
 
-        Log.i(TAG, "Batch executed, " + requests.size() + " prepared, " + successfulRequests.size() + " succeeded, "
+        Log.i(Contract.TAG, "Batch executed, " + requests.size() + " prepared, " + successfulRequests.size() + " succeeded, "
                 + failedRequests.size() + " failed, rest was told to retry");
 
         return successfulRequests.size() > 0 || failedRequests.size() > 0;
@@ -127,5 +115,34 @@ public class CommandManager {
                 }
             }
         }
+    }
+
+    private JSONObject setCookieId(JSONObject command) {
+        try {
+            JSONObject data = command.getJSONObject("data");
+
+            if (data.has("ids") && data.getJSONObject("ids").getString("cookie").isEmpty()) {
+                data.getJSONObject("ids").put("cookie", preferences.getCookieId());
+            }
+
+            if (data.has("customer_ids") && data.getJSONObject("customer_ids").getString("cookie").isEmpty()) {
+                data.getJSONObject("customer_ids").put("cookie", preferences.getCookieId());
+            }
+        }
+        catch (JSONException ignored) {
+        }
+
+        return command;
+    }
+
+    private JSONObject setAge(JSONObject command) {
+        try {
+            long timestamp = command.getJSONObject("data").getLong("age");
+            command.getJSONObject("data").put("age", ((new Date()).getTime() - timestamp) / 1000L);
+        }
+        catch (JSONException ignored) {
+        }
+
+        return command;
     }
 }

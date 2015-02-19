@@ -10,7 +10,7 @@ public class BootReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
         if (intent.getAction().equals("android.intent.action.BOOT_COMPLETED")) {
-            if (Infinario.automaticFlushing(context)) {
+            if (Preferences.get(context).getAutomaticFlushing()) {
                 Log.d(Contract.TAG, "Setting up alarm after a reboot");
                 Infinario.setupPeriodicAlarm(context);
             }

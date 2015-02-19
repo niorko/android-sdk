@@ -11,7 +11,7 @@ public class AlarmReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         Log.d(Contract.TAG, "Wake from " + intent.getExtras().getInt(Contract.EXTRA_REQUEST_CODE));
 
-        if (Infinario.automaticFlushing(context)) {
+        if (Preferences.get(context).getAutomaticFlushing()) {
             Log.d(Contract.TAG, "Flushing data");
             Infinario.flush(context);
         }

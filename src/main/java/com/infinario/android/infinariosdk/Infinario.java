@@ -1,14 +1,11 @@
 package com.infinario.android.infinariosdk;
 
-import android.annotation.SuppressLint;
 import android.app.AlarmManager;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
-import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
@@ -21,12 +18,12 @@ import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GooglePlayServicesUtil;
 import com.google.android.gms.gcm.GoogleCloudMessaging;
 
+
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
 /**
  * This file has been created by Igor Liska on 1/8/15.
@@ -42,18 +39,22 @@ public class Infinario {
     private CommandManager commandManager;
     private final Context context;
     private int commandCounter = Contract.FLUSH_COUNT;
+    private Preferences preferences;
 
     private Infinario(Context context, String token, String target, Map<String, String> customer) {
         this.token = token;
         this.context = context;
 
+        preferences = Preferences.get(context);
+        preferences.setToken(token);
+
         if (null != target) {
-            storeTarget(target.replaceFirst("/*$", ""));
+            preferences.setTarget(target.replaceFirst("/*$", ""));
         }
 
         commandManager = new CommandManager(context, target);
 
-        if (automaticFlushing(context)) {
+        if (preferences.getAutomaticFlushing()) {
             setupPeriodicAlarm(context);
         }
 
@@ -143,9 +144,7 @@ public class Infinario {
     public void identify(Map<String, String> customer, Map<String, Object> properties) {
         this.customer = customer;
 
-        if (!customer.containsKey(Contract.COOKIE)) {
-            customer.put(Contract.COOKIE, getCookieId());
-        }
+        customer.put(Contract.COOKIE, preferences.getCookieId());
 
         identified = true;
         update(properties);
@@ -196,7 +195,7 @@ public class Infinario {
         }
 
         if (commandManager.schedule(new Customer(customer, token, properties))) {
-            if (automaticFlushing(context)) {
+            if (preferences.getAutomaticFlushing()) {
                 setupDelayedAlarm();
             }
 
@@ -221,7 +220,7 @@ public class Infinario {
         }
 
         if (commandManager.schedule(new Event(customer, token, type, properties, timestamp))) {
-            if (automaticFlushing(context)) {
+            if (preferences.getAutomaticFlushing()) {
                 setupDelayedAlarm();
             }
 
@@ -271,7 +270,7 @@ public class Infinario {
             @Override
             protected Void doInBackground(Void... params) {
                 if (isConnected(context)) {
-                    CommandManager commandManager = new CommandManager(context, getTarget(context));
+                    CommandManager commandManager = new CommandManager(context, Preferences.get(context).getTarget());
                     commandManager.flush();
                     setConnectivityMonitor(context, false);
                 }
@@ -319,7 +318,7 @@ public class Infinario {
      * Enables automatic flushing of the events / updates to Infinario.
      */
     public void enableAutomaticFlushing() {
-        setAutomaticFlushing(context, true);
+        preferences.setAutomaticFlushing(true);
         setupPeriodicAlarm(context);
     }
 
@@ -328,7 +327,7 @@ public class Infinario {
      */
     @SuppressWarnings("unused")
     public void disableAutomaticFlushing() {
-        setAutomaticFlushing(context, false);
+        preferences.setAutomaticFlushing(false);
         cancelPeriodicAlarm(context);
     }
 
@@ -346,15 +345,15 @@ public class Infinario {
             return;
         }
 
-        setPushNotification(context, true);
+        preferences.setPushNotifications(true);
 
         // Check device for Play Services APK. If check succeeds, proceed with GCM registration.
         if (checkPlayServices(context)) {
             gcm = GoogleCloudMessaging.getInstance(context);
-            registrationId = getRegistrationId();
+            registrationId = preferences.getRegistrationId();
 
-            storeSenderId(senderId);
-            storeIcon(iconDrawable);
+            preferences.setSenderId(senderId);
+            preferences.setIcon(iconDrawable);
 
             if (registrationId.isEmpty()) {
                 registerInBackground();
@@ -382,7 +381,7 @@ public class Infinario {
      */
     @SuppressWarnings("unused")
     public void disablePushNotifications() {
-        setPushNotification(context, false);
+        preferences.setPushNotifications(false);
     }
 
     /**
@@ -392,11 +391,13 @@ public class Infinario {
      * @param intent received intent from a broadcast receiver.
      */
     public static void handlePushNotification(Context context, Intent intent) {
-        if (pushNotifications(context) && checkPlayServices(context)) {
+        Preferences preferences = Preferences.get(context);
+
+        if (preferences.getPushNotifications() && checkPlayServices(context)) {
             GoogleCloudMessaging gcm = GoogleCloudMessaging.getInstance(context);
             Bundle extras = intent.getExtras();
             String messageType = gcm.getMessageType(intent);
-            String senderId = getSenderId(context);
+            String senderId = preferences.getSenderId();
 
             if (!extras.isEmpty() &&
                     senderId != null &&
@@ -405,41 +406,13 @@ public class Infinario {
                     extras.getString("from").equals(senderId)) {
 
                 Log.d(Contract.TAG, "Received data: " + intent.getExtras().toString());
-                sendNotification(context, intent.getExtras(), getIcon(context));
+                sendNotification(context, intent.getExtras(), preferences.getIcon());
             }
         }
     }
 
-    /**
-     * Checks the state of automatic flushing.
-     *
-     * @param context application's context
-     * @return true if flushing is enabled, false otherwise
-     */
-    public static boolean automaticFlushing(Context context) {
-        return getPreferences(context).getBoolean(Contract.PROPERTY_AUTO_FLUSH, Contract.DEFAULT_AUTO_FLUSH);
-    }
-
-    /**
-     * Checks the state of push notifications.
-     *
-     * @param context application's context
-     * @return true if push notifications are enabled, false otherwise
-     */
-    public static boolean pushNotifications(Context context) {
-        return getPreferences(context).getBoolean(Contract.PROPERTY_PUSH_NOTIFICATIONS, Contract.DEFAULT_PUSH_NOTIFICATIONS);
-    }
-
-    /**
-     * Clears cached information from device's memory (registration id, app version,
-     * cookie ID)
-     */
     public void clearStoredData() {
-        getPreferences(context).edit()
-                .remove(Contract.PROPERTY_APP_VERSION)
-                .remove(Contract.PROPERTY_REG_ID)
-                .remove(Contract.COOKIE)
-                .commit();
+        preferences.clearStoredData();
     }
 
     /**
@@ -529,149 +502,6 @@ public class Infinario {
     }
 
     /**
-     * Stores the registration ID and the app versionCode in the application's
-     * {@code SharedPreferences}.
-     *
-     * @param registrationId registration ID
-     */
-    @SuppressLint("CommitPrefEdits")
-    private void storeRegistrationId(String registrationId) {
-        int appVersion = getAppVersion(context);
-        Log.i(Contract.TAG, "Saving regId on app version " + appVersion);
-
-        getPreferences(context)
-                .edit()
-                .putString(Contract.PROPERTY_REG_ID, registrationId)
-                .putInt(Contract.PROPERTY_APP_VERSION, appVersion)
-                .commit();
-    }
-
-    /**
-     * Stores sender ID in preferences.
-     *
-     * @param senderId sender ID or project number obtained from Google Developers Console
-     */
-    private void storeSenderId(String senderId) {
-        getPreferences(context).edit().putString(Contract.PROPERTY_SENDER_ID, senderId).commit();
-    }
-
-    /**
-     * Stores notification icon preferences.
-     *
-     * @param iconDrawable icon for the notifications, e.g. R.drawable.icon
-     */
-    private void storeIcon(int iconDrawable) {
-        getPreferences(context).edit().putInt(Contract.PROPERTY_ICON, iconDrawable).commit();
-    }
-
-    /**
-     * Stores target (Infinario API location) in preferences.
-     *
-     * @param target Infinario API location
-     */
-    private void storeTarget(String target) {
-        getPreferences(context).edit().putString(Contract.PROPERTY_TARGET, target).commit();
-    }
-
-    /**
-     * Stores status of automatic flushing in preferences.
-     *
-     * @param context application's context
-     * @param value enabled / disabled
-     */
-    private static void setAutomaticFlushing(Context context, boolean value) {
-        getPreferences(context).edit().putBoolean(Contract.PROPERTY_AUTO_FLUSH, value).commit();
-    }
-
-    /**
-     * Stores status of push notifications in preferences.
-     *
-     * @param context application's context
-     * @param value enabled / disabled
-     */
-    private static void setPushNotification(Context context, boolean value) {
-        getPreferences(context).edit().putBoolean(Contract.PROPERTY_PUSH_NOTIFICATIONS, value).commit();
-    }
-
-    /**
-     * Gets the current registration ID for application on GCM service, if there is one.
-     * If result is empty, the app needs to register.
-     *
-     * @return registration ID, or empty string if there is no existing
-     * registration ID.
-     */
-    private String getRegistrationId() {
-        final SharedPreferences prefs = getPreferences(context);
-        String registrationId = prefs.getString(Contract.PROPERTY_REG_ID, "");
-
-        if (registrationId.isEmpty()) {
-            Log.i(Contract.TAG, "Registration not found.");
-            return "";
-        }
-
-        // Check if app was updated; if so, it must clear the registration ID
-        // since the existing regID is not guaranteed to work with the new
-        // app version.
-        int registeredVersion = prefs.getInt(Contract.PROPERTY_APP_VERSION, Integer.MIN_VALUE);
-        int currentVersion = getAppVersion(context);
-
-        if (registeredVersion != currentVersion) {
-            Log.i(Contract.TAG, "App version changed.");
-            return "";
-        }
-
-        return registrationId;
-    }
-
-    /**
-     * Gets cookie ID from preferences.
-     *
-     * @return cookie ID
-     */
-    @SuppressLint("CommitPrefEdits")
-    private String getCookieId() {
-        final SharedPreferences prefs = getPreferences(context);
-        String cookieId = prefs.getString(Contract.COOKIE, "");
-
-        if (cookieId.isEmpty()) {
-            cookieId = UUID.randomUUID().toString();
-            prefs.edit().putString(Contract.COOKIE, cookieId).commit();
-        }
-
-        return cookieId;
-    }
-
-    /**
-     * Gets sender ID from preferences.
-     *
-     * @param context application's context
-     * @return sender ID or project number obtained from Google Developers Console
-     */
-    private static String getSenderId(Context context) {
-        return getPreferences(context).getString(Contract.PROPERTY_SENDER_ID, null);
-    }
-
-    /**
-     * Gets target (Infinario API location) from preferences.
-     *
-     * @param context application's context
-     * @return Infinario API location
-     */
-    private static String getTarget(Context context) {
-        return getPreferences(context).getString(Contract.PROPERTY_TARGET, null);
-    }
-
-    /**
-     * Gets icon from preferences.
-     *
-     * @param context application's context
-     * @return icon resource
-     */
-    private static int getIcon(Context context) {
-        return getPreferences(context).getInt(Contract.PROPERTY_ICON, R.drawable.infinario_notification_icon);
-    }
-
-    /**
      * Registers the application with GCM servers asynchronously.
      * Stores the registration ID and the app versionCode in the application's
      * shared preferences.
@@ -681,10 +511,10 @@ public class Infinario {
             @Override
             protected Void doInBackground(Void... params) {
                 try {
-                    registrationId = gcm.register(getSenderId(context));
+                    registrationId = gcm.register(preferences.getSenderId());
 
                     sendRegistrationIdToBackend();
-                    storeRegistrationId(registrationId);
+                    preferences.setRegistrationId(registrationId);
                 } catch (IOException ex) {
                     Log.e(Contract.TAG, "Error :" + ex.getMessage());
                     // If there is an error, don't just keep trying to register.
@@ -695,33 +525,6 @@ public class Infinario {
                 return null;
             }
         }.execute(null, null, null);
-    }
-
-    /**
-     * Gets app's version from preferences.
-     *
-     * @param context application's context.
-     * @return Application's version code from the {@code PackageManager}.
-     */
-    private static int getAppVersion(Context context) {
-        try {
-            PackageInfo packageInfo = context.getPackageManager()
-                    .getPackageInfo(context.getPackageName(), 0);
-            return packageInfo.versionCode;
-        } catch (PackageManager.NameNotFoundException e) {
-            // should never happen
-            throw new RuntimeException("Could not get package name: " + e);
-        }
-    }
-
-    /**
-     * @param context application's context.
-     * @return Application's {@code SharedPreferences}.
-     */
-    private static SharedPreferences getPreferences(Context context) {
-        // This sample app persists the registration ID in shared preferences, but
-        // how you store the regID in your app is up to you.
-        return context.getSharedPreferences(Contract.PROPERTY, Context.MODE_PRIVATE);
     }
 
     /**
@@ -778,7 +581,7 @@ public class Infinario {
 
         if (activeNetwork != null && activeNetwork.isConnected()) {
             try {
-                URL url = new URL(getTarget(context) + Contract.PING_TARGET);
+                URL url = new URL(Preferences.get(context).getTarget() + Contract.PING_TARGET);
                 HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
                 urlConnection.setRequestProperty("User-Agent", "test");
                 urlConnection.setRequestProperty("Connection", "close");

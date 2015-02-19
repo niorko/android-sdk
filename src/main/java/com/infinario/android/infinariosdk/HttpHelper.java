@@ -7,6 +7,8 @@ import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.util.EntityUtils;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
@@ -39,12 +41,14 @@ public class HttpHelper {
      *
      * @param url target URL
      * @param data nested key-value data encoded as JSON in the body
-     * @return HTTP response as String
+     * @return HTTP response as JSONObject
      */
-    public HttpResponse post(String url, JSONObject data) {
+    public JSONObject post(String url, JSONObject data) {
         HttpClient httpclient = new DefaultHttpClient();
         HttpPost httppost = new HttpPost(target + url);
         StringEntity entity = null;
+        HttpResponse response;
+        String stringResponse;
 
         try {
             entity = new StringEntity(data.toString());
@@ -56,14 +60,16 @@ public class HttpHelper {
         httppost.setHeader("Accept", "application/json");
         httppost.setHeader("Content-type", "application/json");
 
-        HttpResponse response = null;
-
         try {
             response = httpclient.execute(httppost);
+            stringResponse = EntityUtils.toString(response.getEntity());
+            return new JSONObject(stringResponse);
         } catch (IOException e) {
             Log.e(Contract.TAG, "Request to Infinario API failed.");
+            return null;
+        } catch (JSONException e) {
+            Log.e(Contract.TAG, "Request to Infinario API failed: cannot parse response as JSON.");
+            return null;
         }
-
-        return response;
     }
 }

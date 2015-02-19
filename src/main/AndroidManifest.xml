@@ -22,7 +22,8 @@
             </intent-filter>
         </receiver>
 
-        <receiver android:name="com.infinario.android.infinariosdk.AlarmReceiver" >
+        <receiver android:name="com.infinario.android.infinariosdk.AlarmReceiver"
+            android:exported="true">
         </receiver>
 
         <receiver android:name="com.infinario.android.infinariosdk.BootReceiver" >
@@ -35,6 +36,13 @@
             android:enabled="false">
             <intent-filter>
                 <action android:name="android.net.conn.CONNECTIVITY_CHANGE" />
+            </intent-filter>
+        </receiver>
+
+        <receiver android:name="com.infinario.android.infinariosdk.ReferrerReceiver"
+            android:exported="true" >
+            <intent-filter>
+                <action android:name="com.android.vending.INSTALL_REFERRER" />
             </intent-filter>
         </receiver>
 

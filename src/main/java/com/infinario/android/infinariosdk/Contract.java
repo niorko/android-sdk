@@ -23,8 +23,16 @@ public class Contract {
     public static final String PROPERTY_AUTO_FLUSH = "auto_flush";
     public static final String PROPERTY_PUSH_NOTIFICATIONS = "push_notifications";
     public static final String PROPERTY_ICON = "icon";
+    public static final String PROPERTY_REFERRER = "referrer";
+    public static final String PROPERTY_TOKEN = "token";
     public static final String PROPERTY = "infinario";
     public static final String EXTRA_REQUEST_CODE = "request_code";
+
+    /**
+     * Cookie ID negotiation
+     */
+    public static final String NEGOTIATING_STATUS = "negotiating";
+    public static final String NEGOTIATION_ENDPOINT = "/crm/customers/track";
 
     /**
      * Infinario admin details
@@ -38,6 +46,7 @@ public class Contract {
     public static final String EVENT_ENDPOINT = "crm/events";
     public static final String DEFAULT_TARGET = "https://api.7segments.com";
     public static final String PING_TARGET = "/system/time";
+    public static final String BULK_URL = "/bulk";
 
     /**
      * GCM details

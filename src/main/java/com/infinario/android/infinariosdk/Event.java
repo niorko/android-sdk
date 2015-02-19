@@ -30,7 +30,7 @@ public class Event extends Command {
         data.put("customer_ids", customerIds);
         data.put("company_id", companyId);
         data.put("type", type);
-        data.put("age", getAge());
+        data.put("age", createdAt.getTime());
 
         if (null != properties) {
             data.put("properties", properties);

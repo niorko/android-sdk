@@ -18,7 +18,7 @@ apply plugin: 'maven'
 apply plugin: 'signing'
 
 def isReleaseBuild() {
-    return VERSION_NAME.contains("SNAPSHOT") == false
+    return !version.endsWith("SNAPSHOT");
 }
 
 def getReleaseRepositoryUrl() {
@@ -45,9 +45,9 @@ afterEvaluate { project ->
             mavenDeployer {
                 beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
 
-                pom.groupId = GROUP
-                pom.artifactId = POM_ARTIFACT_ID
-                pom.version = VERSION_NAME
+                pom.groupId = 'com.infinario.android.infinariosdk'
+                pom.artifactId = 'infinario-android-sdk'
+                pom.version = '1.0.1'
 
                 repository(url: getReleaseRepositoryUrl()) {
                     authentication(userName: getRepositoryUsername(), password: getRepositoryPassword())
@@ -57,29 +57,29 @@ afterEvaluate { project ->
                 }
 
                 pom.project {
-                    name POM_NAME
-                    packaging POM_PACKAGING
-                    description POM_DESCRIPTION
-                    url POM_URL
+                    name 'Infinario Android SDK'
+                    packaging 'aar'
+                    description 'Infinario Android SDK'
+                    url 'http://infinario.com'
 
                     scm {
-                        url POM_SCM_URL
-                        connection POM_SCM_CONNECTION
-                        developerConnection POM_SCM_DEV_CONNECTION
+                        url 'https://github.com/Infinario/android-sdk'
+                        connection 'scm:git:https://github.com/Infinario/android-sdk.git'
+                        developerConnection 'scm:git:https://github.com/Infinario/android-sdk.git'
                     }
 
                     licenses {
                         license {
-                            name POM_LICENCE_NAME
-                            url POM_LICENCE_URL
-                            distribution POM_LICENCE_DIST
+                            name 'Apache 2 License'
+                            url 'http://www.apache.org/licenses/LICENSE-2.0'
+                            distribution 'repo'
                         }
                     }
 
                     developers {
                         developer {
-                            id POM_DEVELOPER_ID
-                            name POM_DEVELOPER_NAME
+                            id 'igi'
+                            name 'Igor Liska'
                         }
                     }
                 }

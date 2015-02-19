@@ -24,10 +24,6 @@ public class Command {
         this(endpoint, null);
     }
 
-    public long getAge() {
-        return ((new Date()).getTime() - createdAt.getTime()) / 1000L;
-    }
-
     public Map<String, Object> toMap() {
         Map<String, Object> command = new HashMap<>();
 
