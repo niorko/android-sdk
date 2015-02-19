@@ -30,6 +30,10 @@ public class Event extends Command {
         data.put("customer_ids", customerIds);
         data.put("company_id", companyId);
         data.put("type", type);
+
+        // data["age"] temporarily holds the timestamp that is used to
+        // compute the age of the event right before sending the event to the backend
+        // The value of the "age" key is swapped right before sending of the event.
         data.put("age", createdAt.getTime());
 
         if (null != properties) {
