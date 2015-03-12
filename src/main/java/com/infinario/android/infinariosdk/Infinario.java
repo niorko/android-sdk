@@ -1,5 +1,6 @@
 package com.infinario.android.infinariosdk;
 
+import android.app.Activity;
 import android.app.AlarmManager;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -11,6 +12,7 @@ import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.RemoteException;
 import android.support.v4.app.NotificationCompat;
 import android.util.Log;
 
@@ -18,6 +20,9 @@ import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GooglePlayServicesUtil;
 import com.google.android.gms.gcm.GoogleCloudMessaging;
 
+
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.IOException;
 import java.net.HttpURLConnection;
@@ -40,10 +45,12 @@ public class Infinario {
     private final Context context;
     private int commandCounter = Contract.FLUSH_COUNT;
     private Preferences preferences;
+    private Session session = null;
+    private IabHelper iabHelper = null;
 
     private Infinario(Context context, String token, String target, Map<String, String> customer) {
         this.token = token;
-        this.context = context;
+        this.context = context.getApplicationContext();
 
         preferences = Preferences.get(context);
         preferences.setToken(token);
@@ -57,6 +64,9 @@ public class Infinario {
         if (preferences.getAutomaticFlushing()) {
             setupPeriodicAlarm(context);
         }
+
+        iabHelper = new IabHelper(context);
+        iabHelper.startSetup(null);
 
         if (customer != null) {
             identify(customer);
@@ -142,11 +152,25 @@ public class Infinario {
      */
     @SuppressWarnings("unused")
     public void identify(Map<String, String> customer, Map<String, Object> properties) {
-        this.customer = customer;
-
         customer.put(Contract.COOKIE, preferences.getCookieId());
 
-        identified = true;
+        if (session == null) {
+            this.customer = customer;
+            identified = true;
+            setupSession();
+        }
+        else {
+            session.restart(customer);
+        }
+
+        Map<String, Object> identificationProperties = Device.deviceProperties();
+
+        if (customer.containsKey(Contract.REGISTERED)) {
+            identificationProperties.put(Contract.REGISTERED, customer.get(Contract.REGISTERED));
+        }
+
+        track("identification", identificationProperties);
+
         update(properties);
     }
 
@@ -262,6 +286,64 @@ public class Infinario {
         return track(type, null, timestamp);
     }
 
+    public void trackPurchases(int resultCode, Intent data) {
+        if (!iabHelper.setupDone() || data == null) {
+            return;
+        }
+
+        int responseCode = IabHelper.getResponseCodeFromIntent(data);
+        String purchaseData = data.getStringExtra("INAPP_PURCHASE_DATA");
+
+        if (resultCode == Activity.RESULT_OK && responseCode == 0) {
+            if (purchaseData == null) {
+                Log.d(Contract.TAG, "purchaseData is null");
+                return;
+            }
+
+            try {
+                JSONObject o = new JSONObject(purchaseData);
+                final String productId = o.optString("productId");
+                final Long purchaseTime = o.optLong("purchaseTime");
+
+                new AsyncTask<Void, Void, Void>() {
+                    @Override
+                    protected Void doInBackground(Void... params) {
+                        Log.d(Contract.TAG, "Purchased item " + productId + " at " + purchaseTime);
+
+                        SkuDetails details;
+
+                        try {
+                            details = iabHelper.querySkuDetails("inapp", productId);
+
+                            if (details == null && iabHelper.subscriptionsSupported()) {
+                                details = iabHelper.querySkuDetails("subs", productId);
+                            }
+                        }
+                        catch (RemoteException | JSONException e) {
+                            return null;
+                        }
+
+                        if (details != null) {
+                            Map<String, Object> properties = Device.deviceProperties();
+
+                            properties.put("brutto", details.getPrice());
+                            properties.put("currency", details.getCurrency());
+                            properties.put("item_id", productId);
+                            properties.put("item_title", details.getTitle());
+
+                            track("hard_purchase", properties, purchaseTime);
+                        }
+
+                        return null;
+                    }
+                }.execute(null, null, null);
+            }
+            catch (JSONException e) {
+                Log.e(Contract.TAG, "Cannot parse purchaseData");
+            }
+        }
+    }
+
     /**
      * Flushes the updates / events to Infinario API asynchronously.
      */
@@ -317,6 +399,7 @@ public class Infinario {
     /**
      * Enables automatic flushing of the events / updates to Infinario.
      */
+    @SuppressWarnings("UnusedDeclaration")
     public void enableAutomaticFlushing() {
         preferences.setAutomaticFlushing(true);
         setupPeriodicAlarm(context);
@@ -411,6 +494,7 @@ public class Infinario {
         }
     }
 
+    @SuppressWarnings("UnusedDeclaration")
     public void clearStoredData() {
         preferences.clearStoredData();
     }
@@ -424,6 +508,31 @@ public class Infinario {
         Map<String, String> customer_ids = new HashMap<>();
         customer_ids.put(Contract.REGISTERED, customer);
        return customer_ids;
+    }
+
+    private void setupSession() {
+        session = new Session(preferences, new SessionListener() {
+            @Override
+            void onSessionStart(long timestamp) {
+                Log.d(Contract.TAG, "session started");
+
+                track("session_start", Session.defaultProperties(), timestamp);
+            }
+
+            @Override
+            void onSessionEnd(long timestamp, long duration) {
+                Log.d(Contract.TAG, "session finished, duration = " + duration);
+
+                track("session_end", Session.defaultProperties(duration), timestamp);
+            }
+
+            @Override
+            void onSessionRestart(Map<String, String> newCustomer) {
+                customer = newCustomer;
+            }
+        });
+
+        session.run();
     }
 
     /**

@@ -1,6 +1,7 @@
 package com.infinario.android.infinariosdk;
 
 import android.app.AlarmManager;
+import android.os.Build;
 
 /**
  * This file has been created by igi on 1/14/15.
@@ -12,10 +13,18 @@ public class Contract {
     public static final String TAG = "Infinario";
 
     /**
+     * SDK
+     */
+    public static final String SDK = "AndroidSDK";
+    public static final String VERSION = "1.0.4";
+    public static final String OS = "Android";
+
+    /**
      * Preferences details
      */
     public static final String PROPERTY_REG_ID = "registration_id";
     public static final String COOKIE = "cookie";
+    public static final String CAMPAIGN_COOKIE = "campaign_cookie";
     public static final String REGISTERED = "registered";
     public static final String PROPERTY_APP_VERSION = "app_version";
     public static final String PROPERTY_SENDER_ID = "sender_id";
@@ -26,12 +35,13 @@ public class Contract {
     public static final String PROPERTY_REFERRER = "referrer";
     public static final String PROPERTY_TOKEN = "token";
     public static final String PROPERTY = "infinario";
+    public static final String PROPERTY_SESSION_START = "session_start";
+    public static final String PROPERTY_SESSION_END = "session_end";
     public static final String EXTRA_REQUEST_CODE = "request_code";
 
     /**
      * Cookie ID negotiation
      */
-    public static final String NEGOTIATING_STATUS = "negotiating";
     public static final String NEGOTIATION_ENDPOINT = "/crm/customers/track";
 
     /**
@@ -64,6 +74,12 @@ public class Contract {
     public static final int PERIODIC_ALARM = 1;
     public static final int DELAYED_ALARM = 2;
     public static final int IMMEDIATE_ALARM = 3;
+
+    /**
+     * Session
+     */
+    public static final int SESSION_PING_INTERVAL = 1; // in seconds
+    public static final int SESSION_TIMEOUT = 20 * 1000;
 
     /**
      * DbQueue controls

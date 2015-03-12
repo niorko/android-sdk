@@ -5,7 +5,6 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
-import android.os.Build;
 import android.util.Log;
 
 import org.json.JSONException;
@@ -123,7 +122,7 @@ public class Preferences {
      * @return Infinario API location
      */
     public String getTarget() {
-        return getPreferences(context).getString(Contract.PROPERTY_TARGET, null);
+        return getPreferences(context).getString(Contract.PROPERTY_TARGET, Contract.DEFAULT_TARGET);
     }
 
     /**
@@ -151,6 +150,42 @@ public class Preferences {
      */
     public void setAutomaticFlushing(boolean value) {
         getPreferences(context).edit().putBoolean(Contract.PROPERTY_AUTO_FLUSH, value).commit();
+    }
+
+    /**
+     * Gets session start.
+     *
+     * @return timestamp of session start in milliseconds
+     */
+    public long getSessionStart() {
+        return getPreferences(context).getLong(Contract.PROPERTY_SESSION_START, -1);
+    }
+
+    /**
+     * Stores session start.
+     *
+     * @param value timestamp in milliseconds
+     */
+    public void setSessionStart(long value) {
+        getPreferences(context).edit().putLong(Contract.PROPERTY_SESSION_START, value).commit();
+    }
+
+    /**
+     * Gets session end.
+     *
+     * @return timestamp of session start in milliseconds
+     */
+    public long getSessionEnd() {
+        return getPreferences(context).getLong(Contract.PROPERTY_SESSION_END, -1);
+    }
+
+    /**
+     * Stores session end.
+     *
+     * @param value timestamp in milliseconds
+     */
+    public void setSessionEnd(long value) {
+        getPreferences(context).edit().putLong(Contract.PROPERTY_SESSION_END, value).commit();
     }
 
     /**
@@ -224,14 +259,30 @@ public class Preferences {
      * @return cookie ID
      */
     public String getCookieId() {
-        SharedPreferences prefs = getPreferences(context);
-        String cookieId = prefs.getString(Contract.COOKIE, "");
+        return getPreferences(context).getString(Contract.COOKIE, "");
+    }
 
-        if (cookieId.equals(Contract.NEGOTIATING_STATUS)) {
-            cookieId = "";
-        }
+    /**
+     * Sets cookie ID in preferences.
+     */
+    public void setCookieId(String value) {
+        getPreferences(context).edit().putString(Contract.COOKIE, value).commit();
+    }
 
-        return cookieId;
+    /**
+     * Gets campaign cookie ID from preferences.
+     *
+     * @return cookie ID
+     */
+    public String getCampaignCookieId() {
+        return getPreferences(context).getString(Contract.CAMPAIGN_COOKIE, "");
+    }
+
+    /**
+     * Sets campaign cookie ID in preferences.
+     */
+    public void setCampaignCookieId(String value) {
+        getPreferences(context).edit().putString(Contract.CAMPAIGN_COOKIE, value).commit();
     }
 
     /**
@@ -241,31 +292,23 @@ public class Preferences {
      */
     @SuppressLint("CommitPrefEdits")
     public boolean ensureCookieId() {
-        SharedPreferences prefs = getPreferences(context);
-        String cookieId = prefs.getString(Contract.COOKIE, "");
+        String campaignCookieId = getCampaignCookieId();
 
-        if (cookieId.isEmpty()) {
+        if (campaignCookieId.isEmpty()) {
             String token = getToken();
 
             if (token == null) return false;
 
-            prefs.edit().putString(Contract.COOKIE, Contract.NEGOTIATING_STATUS).commit();
-
             Map<String, String> ids = new HashMap<>();
-            Map<String, String> device = new HashMap<>();
             Map<String, Object> data;
 
-            cookieId = UUID.randomUUID().toString();
-            ids.put(Contract.COOKIE, cookieId);
-
-            device.put("device_model", Build.MODEL);
-            device.put("os_version", Build.VERSION.RELEASE);
-            device.put("os_name", "Android");
+            campaignCookieId = UUID.randomUUID().toString();
+            ids.put(Contract.COOKIE, campaignCookieId);
 
             Customer customer = new Customer(ids, token, null);
 
             data = customer.getData();
-            data.put("device", device);
+            data.put("device", Device.deviceProperties());
             data.put("campaign_id", getReferrer());
 
             HttpHelper http = new HttpHelper(getTarget());
@@ -274,20 +317,20 @@ public class Preferences {
 
             if (response != null) {
                 try {
-                    cookieId = response.getJSONObject("data").getJSONObject("ids").getString("cookie");
+                    campaignCookieId = response.getJSONObject("data").getJSONObject("ids").getString("cookie");
                     Log.d(Contract.TAG, "Negotiated cookie id");
-                    prefs.edit().putString(Contract.COOKIE, cookieId).commit();
+                    setCampaignCookieId(campaignCookieId);
+
+                    if (getCookieId().isEmpty()) {
+                        setCookieId(campaignCookieId);
+                    }
+
                     return true;
                 }
                 catch (JSONException ignored) {
                 }
             }
 
-            prefs.edit().putString(Contract.COOKIE, "").commit();
-
-            return false;
-        }
-        else if (cookieId.equals(Contract.NEGOTIATING_STATUS)) {
             return false;
         }
 
@@ -322,7 +365,10 @@ public class Preferences {
                 .remove(Contract.PROPERTY_PUSH_NOTIFICATIONS)
                 .remove(Contract.PROPERTY_SENDER_ID)
                 .remove(Contract.PROPERTY_AUTO_FLUSH)
+                .remove(Contract.PROPERTY_SESSION_START)
+                .remove(Contract.PROPERTY_SESSION_END)
                 .remove(Contract.COOKIE)
+                .remove(Contract.CAMPAIGN_COOKIE)
                 .commit();
     }
 }

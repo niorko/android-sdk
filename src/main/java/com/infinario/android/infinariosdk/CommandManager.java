@@ -103,7 +103,7 @@ public class CommandManager {
         return successfulRequests.size() > 0 || failedRequests.size() > 0;
     }
 
-    public void flush() {
+    public synchronized void flush() {
         int retries = MAX_RETRIES;
 
         while (retries > 0) {
@@ -122,11 +122,11 @@ public class CommandManager {
             JSONObject data = command.getJSONObject("data");
 
             if (data.has("ids") && data.getJSONObject("ids").getString("cookie").isEmpty()) {
-                data.getJSONObject("ids").put("cookie", preferences.getCookieId());
+                data.getJSONObject("ids").put("cookie", preferences.getCampaignCookieId());
             }
 
             if (data.has("customer_ids") && data.getJSONObject("customer_ids").getString("cookie").isEmpty()) {
-                data.getJSONObject("customer_ids").put("cookie", preferences.getCookieId());
+                data.getJSONObject("customer_ids").put("cookie", preferences.getCampaignCookieId());
             }
         }
         catch (JSONException ignored) {
