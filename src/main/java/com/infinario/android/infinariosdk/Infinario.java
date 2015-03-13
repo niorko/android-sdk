@@ -47,6 +47,7 @@ public class Infinario {
     private Preferences preferences;
     private Session session = null;
     private IabHelper iabHelper = null;
+    private Map<String, Object> sessionProperties;
 
     private Infinario(Context context, String token, String target, Map<String, String> customer) {
         this.token = token;
@@ -54,6 +55,8 @@ public class Infinario {
 
         preferences = Preferences.get(context);
         preferences.setToken(token);
+
+        sessionProperties = new HashMap<>();
 
         if (null != target) {
             preferences.setTarget(target.replaceFirst("/*$", ""));
@@ -286,6 +289,13 @@ public class Infinario {
         return track(type, null, timestamp);
     }
 
+    @SuppressWarnings("unused")
+    public void setSessionProperties(Map<String, Object> properties) {
+        if (properties != null) {
+            sessionProperties = properties;
+        }
+    }
+
     public void trackPurchases(int resultCode, Intent data) {
         if (!iabHelper.setupDone() || data == null) {
             return;
@@ -516,14 +526,20 @@ public class Infinario {
             void onSessionStart(long timestamp) {
                 Log.d(Contract.TAG, "session started");
 
-                track("session_start", Session.defaultProperties(), timestamp);
+                Map<String, Object> properties = Session.defaultProperties();
+                properties.putAll(sessionProperties);
+
+                track("session_start", properties, timestamp);
             }
 
             @Override
             void onSessionEnd(long timestamp, long duration) {
                 Log.d(Contract.TAG, "session finished, duration = " + duration);
 
-                track("session_end", Session.defaultProperties(duration), timestamp);
+                Map<String, Object> properties = Session.defaultProperties(duration);
+                properties.putAll(sessionProperties);
+
+                track("session_end", properties, timestamp);
             }
 
             @Override
