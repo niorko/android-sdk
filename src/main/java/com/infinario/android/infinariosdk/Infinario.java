@@ -71,9 +71,11 @@ public class Infinario {
         iabHelper = new IabHelper(context);
         iabHelper.startSetup(null);
 
-        if (customer != null) {
-            identify(customer);
+        if (customer == null) {
+            customer = new HashMap<>();
         }
+
+        identify(customer);
     }
 
     /**
