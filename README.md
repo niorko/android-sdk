@@ -2,7 +2,7 @@
 Infinario Android SDK is available in this Git repository: <a href="https://github.com/infinario/android-sdk">https://github.com/infinario/android-sdk</a>.
 <h2>Installation (Android Studio / Gradle)</h2>
 <ol>
-	<li>Download the <a href="https://github.com/infinario/android-sdk/releases">lastest release</a> of the Android SDK</li>
+	<li>Download the <a href="https://github.com/infinario/android-sdk/releases">latest release</a> of the Android SDK</li>
 	<li>Unzip / untar the downloaded SDK into a preferred directory</li>
 	<li>In Android Studio, click <strong>File -&gt; Import Module...</strong></li>
 	<li>In the opened dialog window, locate the unzipped Android SDK directory and click <strong>Finish</strong></li>
@@ -14,7 +14,7 @@ Infinario Android SDK is available in this Git repository: <a href="https://git
 After completing the steps above the Infinario Android SDK is now included in your app and ready to be used.
 <h2>Usage</h2>
 <h3>Basic Interface</h3>
-Once the IDE is set up, you may start using the Infinario library in your code. First you need to you need to know the URI of your Infinario API instance, usualy <code>https://api.infinario.com</code> and your <code>companyToken</code> (located at the Company / Overview page in the web application). To interact with the Infinario SDK, you need to obtain an instance of the Infinario class using the <code>application's context</code> and <code>companyToken</code> (the URI parameter is optional):
+Once the IDE is set up, you may start using the Infinario library in your code. First you need to you need to know the URI of your Infinario API instance, usually <code>https://api.infinario.com</code> and your <code>companyToken</code> (located at the Company / Overview page in the web application). To interact with the Infinario SDK, you need to obtain an instance of the Infinario class using the <code>application's context</code> and <code>companyToken</code> (the URI parameter is optional):
 <pre><code>// Use public Infinario instance
 Infinario infinario = Infinario.getInstance(getApplicationContext(), companyToken);
 
