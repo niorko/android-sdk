@@ -95,8 +95,3 @@ public class Session {
     }
 }
 
-abstract class SessionListener {
-    abstract void onSessionStart(long timestamp);
-    abstract void onSessionEnd(long timestamp, long duration);
-    abstract void onSessionRestart(Map<String, String> newCustomer);
-}
