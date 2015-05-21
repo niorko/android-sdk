@@ -75,7 +75,7 @@ Session is a time spent in the game, it starts when the game is launched and end
   "os_name": "Android",
   "os_version": "5.0.1",
   "sdk": "AndroidSDK",
-  "sdk_version": "1.0.5"
+  "sdk_version": "1.0.6"
 }
 </code></pre>
 
@@ -94,7 +94,7 @@ Installation event is fired <strong>only once</strong> for the whole lifetime of
   "os_name": "Android",
   "os_version": "5.0.1",
   "sdk": "AndroidSDK",
-  "sdk_version": "1.0.5"
+  "sdk_version": "1.0.6"
 }
 </code></pre>
 
@@ -111,7 +111,7 @@ Identification event is tracked each time the <code>identify()</code> method is 
   "os_name": "Android",
   "os_version": "5.0.1",
   "sdk": "AndroidSDK",
-  "sdk_version": "1.0.5"
+  "sdk_version": "1.0.6"
 }
 </code></pre>
 
@@ -147,7 +147,7 @@ Purchase events (called <code>hard_purchase</code>) contain all basic informatio
   "os_name": "Android",
   "os_version": "5.0.1",
   "sdk": "AndroidSDK",
-  "sdk_version": "1.0.5"
+  "sdk_version": "1.0.6"
 }
 </code></pre>
 
