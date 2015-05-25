@@ -6,6 +6,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
+
 /**
  * This file has been created by igi on 1/13/15.
  */
@@ -28,7 +29,7 @@ public class Command {
         Map<String, Object> command = new HashMap<>();
 
         command.put("name", endpoint);
-        command.put("data", getData());
+        command.put("data", new JSONObject(getData()));
 
         return command;
     }

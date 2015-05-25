@@ -1,5 +1,7 @@
 package com.infinario.android.infinariosdk;
 
+import org.json.JSONObject;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -27,7 +29,7 @@ public class Event extends Command {
     protected Map<String, Object> getData() {
         Map<String, Object> data = new HashMap<>();
 
-        data.put("customer_ids", customerIds);
+        data.put("customer_ids", new JSONObject(customerIds));
         data.put("company_id", companyId);
         data.put("type", type);
 
@@ -37,7 +39,7 @@ public class Event extends Command {
         data.put("age", createdAt.getTime());
 
         if (null != properties) {
-            data.put("properties", properties);
+            data.put("properties", new JSONObject(properties));
         }
 
         return data;

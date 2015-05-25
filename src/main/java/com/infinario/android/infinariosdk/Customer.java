@@ -1,5 +1,7 @@
 package com.infinario.android.infinariosdk;
 
+import org.json.JSONObject;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -24,11 +26,11 @@ public class Customer extends Command {
     protected Map<String, Object> getData() {
         Map<String, Object> data = new HashMap<>();
 
-        data.put("ids", ids);
+        data.put("ids", new JSONObject(ids));
         data.put("company_id", companyId);
 
         if (null != properties) {
-            data.put("properties", properties);
+            data.put("properties", new JSONObject(properties));
         }
 
         return data;
