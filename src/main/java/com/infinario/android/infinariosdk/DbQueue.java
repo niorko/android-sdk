@@ -4,7 +4,9 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteDatabaseLockedException;
 import android.text.TextUtils;
+import android.util.Log;
 
 import org.json.JSONException;
 
@@ -59,13 +61,17 @@ public class DbQueue {
     }
 
     public void clear(Set<Integer> successful, Set<Integer> failed) {
-        db.delete(Contract.TABLE_COMMANDS, Contract.COLUMN_ID + " IN (" + TextUtils.join(", ", successful) + ")", null);
+        try{
+            db.delete(Contract.TABLE_COMMANDS, Contract.COLUMN_ID + " IN (" + TextUtils.join(", ", successful) + ")", null);
 
-        db.execSQL(
-                "UPDATE " + Contract.TABLE_COMMANDS + " "
-              + "SET " + Contract.COLUMN_RETRIES + " = " + Contract.COLUMN_RETRIES + " + 1 "
-              + "WHERE " + Contract.COLUMN_ID + " IN (" + TextUtils.join(", ", failed) + ")");
+            db.execSQL(
+                    "UPDATE " + Contract.TABLE_COMMANDS + " "
+                            + "SET " + Contract.COLUMN_RETRIES + " = " + Contract.COLUMN_RETRIES + " + 1 "
+                            + "WHERE " + Contract.COLUMN_ID + " IN (" + TextUtils.join(", ", failed) + ")");
 
-        db.delete(Contract.TABLE_COMMANDS, Contract.COLUMN_RETRIES + " > " + Contract.MAX_RETRIES, null);
+            db.delete(Contract.TABLE_COMMANDS, Contract.COLUMN_RETRIES + " > " + Contract.MAX_RETRIES, null);
+        } catch (SQLiteDatabaseLockedException e){
+            Log.e(Contract.TAG, "Infinario catch SQLiteDabaseLockedException");
+        }
     }
 }
