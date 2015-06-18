@@ -40,7 +40,6 @@ public class Infinario {
     private String token;
     private String registrationId;
     private Map<String, String> customer;
-    private boolean identified = false;
     private CommandManager commandManager;
     private final Context context;
     private int commandCounter = Contract.FLUSH_COUNT;
@@ -75,7 +74,10 @@ public class Infinario {
             customer = new HashMap<>();
         }
 
-        identify(customer);
+        customer.put(Contract.COOKIE, preferences.getCookieId());
+
+        this.customer = customer;
+        setupSession();
     }
 
     /**
@@ -149,34 +151,20 @@ public class Infinario {
     }
 
     /**
-     * Identifies a customer with their registered ID or cookie ID. If no cookie ID is
-     * supplied, it is generated automatically.
+     * Identifies a customer with their registered ID.
      *
-     * @param customer key-value ids (cookie ID or registered ID)
+     * @param customer key-value ids (registered ID)
      * @param properties key-value customer's properties
      */
     @SuppressWarnings("unused")
     public void identify(Map<String, String> customer, Map<String, Object> properties) {
-        customer.put(Contract.COOKIE, preferences.getCookieId());
-
-        if (session == null) {
-            this.customer = customer;
-            identified = true;
-            setupSession();
-        }
-        else {
-            session.restart(customer);
-        }
-
-        Map<String, Object> identificationProperties = Device.deviceProperties();
-
         if (customer.containsKey(Contract.REGISTERED)) {
+            this.customer.put(Contract.REGISTERED, customer.get(Contract.REGISTERED));
+            Map<String, Object> identificationProperties = Device.deviceProperties();
             identificationProperties.put(Contract.REGISTERED, customer.get(Contract.REGISTERED));
+            track("identification", identificationProperties);
+            update(properties);
         }
-
-        track("identification", identificationProperties);
-
-        update(properties);
     }
 
     /**
@@ -218,11 +206,6 @@ public class Infinario {
      * @return success of the operation
      */
     public boolean update(Map<String, Object> properties) {
-        if (!identified) {
-            Log.e(Contract.TAG, "Cannot update customer's properties prior to the identification.");
-            return false;
-        }
-
         if (commandManager.schedule(new Customer(customer, token, properties))) {
             if (preferences.getAutomaticFlushing()) {
                 setupDelayedAlarm();
@@ -243,11 +226,6 @@ public class Infinario {
      * @return success of the operation
      */
     public boolean track(String type, Map<String, Object> properties, Long timestamp) {
-        if (!identified) {
-            Log.e(Contract.TAG, "Cannot track an event prior to the identification.");
-            return false;
-        }
-
         if (commandManager.schedule(new Event(customer, token, type, properties, timestamp))) {
             if (preferences.getAutomaticFlushing()) {
                 setupDelayedAlarm();
@@ -435,11 +413,6 @@ public class Infinario {
      */
     @SuppressWarnings("unused")
     public void enablePushNotifications(String senderId, int iconDrawable) {
-        if (!identified) {
-            Log.e(Contract.TAG, "Cannot enable push notifications prior to the identification.");
-            return;
-        }
-
         preferences.setPushNotifications(true);
 
         // Check device for Play Services APK. If check succeeds, proceed with GCM registration.
