@@ -468,7 +468,12 @@ public class Infinario {
      */
     @SuppressWarnings("unused")
     public void enablePushNotifications(String senderId) {
-        enablePushNotifications(senderId, R.drawable.infinario_notification_icon);
+        enablePushNotifications(senderId, getDrawableId("infinario_notification_icon"));
+    }
+
+    @SuppressWarnings("unused")
+    public void enablePushNotifications(String senderId, String nameDrawable) {
+        enablePushNotifications(senderId, getDrawableId(nameDrawable));
     }
 
     /**
@@ -737,5 +742,21 @@ public class Infinario {
         packageManager.setComponentEnabledSetting(receiver,
                 (enabled ? PackageManager.COMPONENT_ENABLED_STATE_ENABLED : PackageManager.COMPONENT_ENABLED_STATE_DISABLED),
                 PackageManager.DONT_KILL_APP);
+    }
+
+    /**
+     * @return return drawable id by string
+     */
+    private int getDrawableId(String nameDrawable){
+        try {
+            return context.getResources().getIdentifier(nameDrawable, "drawable", context.getPackageName());
+        } catch (Exception e) {
+            Log.e(Contract.TAG, "Cannot find drawable with name " + nameDrawable);
+            if (!nameDrawable.equals("infinario_notification_icon")){
+                return getDrawableId("infinario_notification_icon");
+            } else {
+                return -1;
+            }
+        }
     }
 }

@@ -86,7 +86,7 @@ public class Preferences {
      * @return icon resource
      */
     public int getIcon() {
-        return getPreferences(context).getInt(Contract.PROPERTY_ICON, R.drawable.infinario_notification_icon);
+        return getPreferences(context).getInt(Contract.PROPERTY_ICON, -1);
     }
 
     /**
