@@ -115,10 +115,10 @@ Identification event is tracked each time the <code>identify()</code> method is 
 }
 </code></pre>
 
-<h3>Payments</h3>
+<h3>Payments for Google Play Store</h3>
 
 <p>
-In order to use the automatic payment tracking, the INFINARIO Android SDK needs to know when a purchase flow has finished. After the player goes through the whole purchase process, Android calls <code>onActivityResult</code> method on the activity which started the purchase flow. That is the place in the game code where INFINARIO Android SDK instance needs to get notified about the purchase using the <code>trackPurchases()</code> method. For more details, please refer to the sample code below:
+In order to use the automatic payment tracking, the INFINARIO Android SDK needs to know when a purchase flow has finished. After the player goes through the whole purchase process, Android calls <code>onActivityResult</code> method on the activity which started the purchase flow. That is the place in the game code where INFINARIO Android SDK instance needs to get notified about the purchase using the <code>trackPurchases(int, Intent)</code> method. For more details, please refer to the sample code below:
 </p>
 
 <pre><code>// override this method in each activity which starts the purchase flow
@@ -134,7 +134,7 @@ protected void onActivityResult(int requestCode, int resultCode, Intent data) {
 </code></pre>
 
 <p>
-Purchase events (called <code>hard_purchase</code>) contain all basic information about the device (OS, OS version, SDK, SDK version and device model) combined with additional purchase attributes <strong>brutto</strong>, <strong>currency</strong>, <strong>item_id</strong> and <strong>item_title</strong>. <strong>Brutto</strong> attribute contains price paid by the player. Attribute <strong>item_title</strong> consists of human-friendly name of the bought item (e.g. Silver sword) and <strong>item_id</strong> corresponds to the product ID for the in-app purchase as defined in your Google Play Developer Console. Example of purchase event: 
+Purchase events (called <code>hard_purchase</code>) contain all basic information about the device (OS, OS version, SDK, SDK version and device model) combined with additional purchase attributes <strong>brutto</strong>, <strong>currency</strong>, <strong>product_id</strong> and <strong>product_title</strong>. <strong>Brutto</strong> attribute contains price paid by the player. Attribute <strong>product_title</strong> consists of human-friendly name of the bought item (e.g. Silver sword) and <strong>product_id</strong> corresponds to the product ID for the in-app purchase as defined in your Google Play / Amazon Developer Console. Example of purchase event: 
 </p>
 
 <pre><code>{

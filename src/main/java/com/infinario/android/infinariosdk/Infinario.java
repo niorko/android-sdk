@@ -294,6 +294,7 @@ public class Infinario {
                 JSONObject o = new JSONObject(purchaseData);
                 final String productId = o.optString("productId");
                 final Long purchaseTime = o.optLong("purchaseTime");
+                final String purchaseToken = o.optString("purchaseToken");
 
                 new AsyncTask<Void, Void, Void>() {
                     @Override
@@ -318,10 +319,12 @@ public class Infinario {
 
                             properties.put("brutto", details.getPrice());
                             properties.put("currency", details.getCurrency());
-                            properties.put("item_id", productId);
-                            properties.put("item_title", details.getTitle());
+                            properties.put("product_id", productId);
+                            properties.put("product_title", details.getTitle());
+                            properties.put("product_token", purchaseToken);
+                            properties.put("payment_system", "Google Play Store");
 
-                            track("hard_purchase", properties, purchaseTime);
+                            track("payment", properties, purchaseTime);
                         }
 
                         return null;
