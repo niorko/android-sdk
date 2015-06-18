@@ -47,7 +47,7 @@ afterEvaluate { project ->
 
                 pom.groupId = 'com.infinario.android.infinariosdk'
                 pom.artifactId = 'infinario-android-sdk'
-                pom.version = '1.0.6'
+                pom.version = '1.0.7'
 
                 repository(url: getReleaseRepositoryUrl()) {
                     authentication(userName: getRepositoryUsername(), password: getRepositoryPassword())
