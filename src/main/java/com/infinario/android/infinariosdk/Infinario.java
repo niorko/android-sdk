@@ -16,6 +16,7 @@ import android.os.RemoteException;
 import android.support.v4.app.NotificationCompat;
 import android.util.Log;
 
+import com.google.android.gms.ads.identifier.AdvertisingIdClient;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GooglePlayServicesUtil;
 import com.google.android.gms.gcm.GoogleCloudMessaging;
@@ -75,6 +76,10 @@ public class Infinario {
         }
 
         customer.put(Contract.COOKIE, preferences.getCookieId());
+
+        if (preferences.getGoogleAdvertisingId().isEmpty()){
+            initializeGoogleAdvertisingId();
+        }
 
         this.customer = customer;
         setupSession();
@@ -734,5 +739,25 @@ public class Infinario {
                 return -1;
             }
         }
+    }
+
+    /**
+     * initializes google advertising ID
+     */
+    private void initializeGoogleAdvertisingId(){
+        new Thread(new Runnable() {
+            public void run() {
+                try {
+                    AdvertisingIdClient.Info adInfo = AdvertisingIdClient.getAdvertisingIdInfo(context);
+                    preferences.setGoogleAdvertisingId(adInfo.getId());
+
+                    HashMap<String,Object> advId = new HashMap<String, Object>();
+                    advId.put(Contract.PROPERTY_GOOGLE_ADV_ID,adInfo.getId());
+                    update(advId);
+                } catch (Exception e) {
+                    Log.e(Contract.TAG, "Cannot initialize google advertising ID");
+                }
+            }
+        }).start();
     }
 }

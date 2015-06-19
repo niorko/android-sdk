@@ -38,6 +38,7 @@ public class Contract {
     public static final String PROPERTY_SESSION_START = "session_start";
     public static final String PROPERTY_SESSION_END = "session_end";
     public static final String EXTRA_REQUEST_CODE = "request_code";
+    public static final String PROPERTY_GOOGLE_ADV_ID = "google_adv_id";
 
     /**
      * Cookie ID negotiation

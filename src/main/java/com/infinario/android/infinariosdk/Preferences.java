@@ -270,6 +270,22 @@ public class Preferences {
     }
 
     /**
+     * Gets google advertising ID from preferences.
+     *
+     * @return google advertising ID
+     */
+    public String getGoogleAdvertisingId() {
+        return getPreferences(context).getString(Contract.PROPERTY_GOOGLE_ADV_ID, "");
+    }
+
+    /**
+     * Sets google advertising ID in preferences.
+     */
+    public void setGoogleAdvertisingId(String value){
+        getPreferences(context).edit().putString(Contract.PROPERTY_GOOGLE_ADV_ID, value).commit();
+    }
+
+    /**
      * Gets campaign cookie ID from preferences.
      *
      * @return cookie ID
@@ -369,6 +385,7 @@ public class Preferences {
                 .remove(Contract.PROPERTY_SESSION_END)
                 .remove(Contract.COOKIE)
                 .remove(Contract.CAMPAIGN_COOKIE)
+                .remove(Contract.PROPERTY_GOOGLE_ADV_ID)
                 .commit();
     }
 }
