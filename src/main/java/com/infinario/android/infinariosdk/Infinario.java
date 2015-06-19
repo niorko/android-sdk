@@ -48,6 +48,7 @@ public class Infinario {
     private Session session = null;
     private IabHelper iabHelper = null;
     private Map<String, Object> sessionProperties;
+    private JSONObject amazonProduct;
 
     private Infinario(Context context, String token, String target, Map<String, String> customer) {
         this.token = token;
@@ -339,6 +340,34 @@ public class Infinario {
             catch (JSONException e) {
                 Log.e(Contract.TAG, "Cannot parse purchaseData");
             }
+        }
+    }
+
+    public void loadAmazonProduct(JSONObject amazonJsonProductDataResponse){
+        amazonProduct = amazonJsonProductDataResponse;
+    }
+
+    public void trackPurchases(JSONObject amazonJsonPurchaseResponse){
+        Map<String, Object> properties = Device.deviceProperties();
+        properties.put("payment_system", "Amazon Store");
+        try {
+            String sku = amazonJsonPurchaseResponse.getJSONObject("receipt").getString("sku");
+            if (amazonProduct != null){
+                try {
+                    String [] priceCurrency = splitPriceAndCurrency(amazonProduct.getJSONObject("productData").getJSONObject(sku).getString("price"));
+                    properties.put("brutto", priceCurrency[1]);
+                    properties.put("currency", priceCurrency[0]);
+                    properties.put("product_title", amazonProduct.getJSONObject("productData").getJSONObject(sku).getString("title"));
+                } catch (JSONException e) {
+                    Log.e(Contract.TAG, "Cannot parse productData from Amazon Store");
+                }
+            }
+            properties.put("product_id", sku);
+            properties.put("user_id", amazonJsonPurchaseResponse.getJSONObject("userData").getString("userId"));
+            properties.put("receipt", amazonJsonPurchaseResponse.getJSONObject("receipt").getString("receiptId"));
+            track("payment", properties);
+        } catch (JSONException e) {
+            Log.e(Contract.TAG, "Cannot parse purchaseData from Amazon Store");
         }
     }
 
@@ -759,5 +788,20 @@ public class Infinario {
                 }
             }
         }).start();
+    }
+
+    /**
+     * Split string where is Price and Currency together.
+     */
+    private String[] splitPriceAndCurrency(String price){
+        StringBuilder currency = new StringBuilder();
+        for (int i=0;i<price.length();i++){
+            if (!Character.isDigit(price.charAt(i))){
+                currency.append(price.charAt(i));
+            } else {
+                break;
+            }
+        }
+        return new String[]{currency.toString(),price.substring(currency.length())};
     }
 }

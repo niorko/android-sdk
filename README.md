@@ -133,6 +133,55 @@ protected void onActivityResult(int requestCode, int resultCode, Intent data) {
 }
 </code></pre>
 
+<h3>Payments for Amazon Store</h3>
+
+<p>Implementation is made by 2 steps.</p>
+
+<p>
+First, you must get product's information by call method <code>loadAmazonProduct(JSONObject amazonJsonProductDataResponse)</code> from Amazon SDK Purchase Listener <code>onProductDataResponse(final ProductDataResponse response)</code>.
+</p>
+
+<pre><code>@Override
+public void onProductDataResponse(final ProductDataResponse response) {
+    final ProductDataResponse.RequestStatus status = response.getRequestStatus();
+
+    switch (status) {
+        case SUCCESSFUL:
+            final Set unavailableSkus = response.getUnavailableSkus();
+            try {
+                infinario.loadAmazonProduct(response.toJSON());
+            } catch (JSONException e) {
+            }
+            iapManager.enablePurchaseForSkus(response.getProductData());
+            iapManager.disablePurchaseForSkus(response.getUnavailableSkus());
+            break;
+        case FAILED:
+        ......
+</code></pre>
+
+<p>
+Second, call method <code>trackPurchases(JSONObject amazonJsonPurchaseResponse)</code> in Amazon SDK Purchase Listener <code>onPurchaseResponse(final PurchaseResponse response)</code> to track Amazon purchases.
+</p>
+
+<pre><code>@Override
+public void onPurchaseResponse(final PurchaseResponse response) {
+    final PurchaseResponse.RequestStatus status = response.getRequestStatus();
+
+    switch (status) {
+        case SUCCESSFUL:
+            final Receipt receipt = response.getReceipt();
+            try {
+                infinario.trackAmazonPurchases(response.toJSON());
+            } catch (JSONException e) {
+            }
+            iapManager.setAmazonUserId(response.getUserData().getUserId(), response.getUserData().getMarketplace());
+            iapManager.handleReceipt(receipt, response.getUserData());
+            iapManager.refreshOranges();
+            break;
+        case ALREADY_PURCHASED:
+        .....
+</code></pre>
+
 <p>
 Purchase events (called <code>hard_purchase</code>) contain all basic information about the device (OS, OS version, SDK, SDK version and device model) combined with additional purchase attributes <strong>brutto</strong>, <strong>currency</strong>, <strong>product_id</strong> and <strong>product_title</strong>. <strong>Brutto</strong> attribute contains price paid by the player. Attribute <strong>product_title</strong> consists of human-friendly name of the bought item (e.g. Silver sword) and <strong>product_id</strong> corresponds to the product ID for the in-app purchase as defined in your Google Play / Amazon Developer Console. Example of purchase event: 
 </p>
