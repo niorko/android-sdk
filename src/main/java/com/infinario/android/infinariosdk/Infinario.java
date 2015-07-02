@@ -282,7 +282,15 @@ public class Infinario {
         }
     }
 
-    public void trackPurchases(int resultCode, Intent data) {
+    /**
+     * @deprecated  As of release 1.1.0, replaced by {@link #trackGooglePurchases(int resultCode, Intent data)}
+     */
+    @Deprecated
+    public void trackPurchases(int resultCode, Intent data){
+        this.trackGooglePurchases(resultCode, data);
+    }
+
+    public void trackGooglePurchases(int resultCode, Intent data) {
         if (!iabHelper.setupDone() || data == null) {
             return;
         }
@@ -323,7 +331,7 @@ public class Infinario {
                         if (details != null) {
                             Map<String, Object> properties = Device.deviceProperties();
 
-                            properties.put("brutto", details.getPrice());
+                            properties.put("gross_amount", details.getPrice());
                             properties.put("currency", details.getCurrency());
                             properties.put("product_id", productId);
                             properties.put("product_title", details.getTitle());
@@ -347,7 +355,7 @@ public class Infinario {
         amazonProduct = amazonJsonProductDataResponse;
     }
 
-    public void trackPurchases(JSONObject amazonJsonPurchaseResponse){
+    public void trackAmazonPurchases(JSONObject amazonJsonPurchaseResponse){
         Map<String, Object> properties = Device.deviceProperties();
         properties.put("payment_system", "Amazon Store");
         try {
@@ -355,7 +363,7 @@ public class Infinario {
             if (amazonProduct != null){
                 try {
                     String [] priceCurrency = splitPriceAndCurrency(amazonProduct.getJSONObject("productData").getJSONObject(sku).getString("price"));
-                    properties.put("brutto", priceCurrency[1]);
+                    properties.put("gross_amount", priceCurrency[1]);
                     properties.put("currency", priceCurrency[0]);
                     properties.put("product_title", amazonProduct.getJSONObject("productData").getJSONObject(sku).getString("title"));
                 } catch (JSONException e) {
@@ -442,15 +450,23 @@ public class Infinario {
     }
 
     /**
-     * Enables receiving of push notifications to the app from an Infinario scenario. Push
+     * @deprecated  As of release 1.1.0, replaced by {@link #enableGooglePushNotifications(String senderId, int iconDrawable)}
+     */
+    @Deprecated
+    public void enablePushNotifications(String senderId, int iconDrawable){
+        this.enableGooglePushNotifications(senderId, iconDrawable);
+    }
+
+    /**
+     * Enables receiving of google push notifications to the app from an Infinario scenario. Push
      * notifications cannot be enabled prior to the identification.
      *
      * @param senderId sender ID or project number obtained from Google Developers Console
      * @param iconDrawable icon for the notifications, e.g. R.drawable.icon
      */
     @SuppressWarnings("unused")
-    public void enablePushNotifications(String senderId, int iconDrawable) {
-        preferences.setPushNotifications(true);
+    public void enableGooglePushNotifications(String senderId, int iconDrawable) {
+        preferences.setGooglePushNotifications(true);
 
         // Check device for Play Services APK. If check succeeds, proceed with GCM registration.
         if (checkPlayServices(context)) {
@@ -472,26 +488,50 @@ public class Infinario {
     }
 
     /**
-     * Enables receiving of push notifications to the app from an Infinario scenario.
+     * @deprecated  As of release 1.1.0, replaced by {@link #enableGooglePushNotifications(String senderId)}
+     */
+    @Deprecated
+    public void enablePushNotifications(String senderId){
+        this.enableGooglePushNotifications(senderId);
+    }
+
+    /**
+     * Enables receiving of google push notifications to the app from an Infinario scenario.
      *
      * @param senderId sender ID or project number obtained from Google Developers Console
      */
     @SuppressWarnings("unused")
-    public void enablePushNotifications(String senderId) {
-        enablePushNotifications(senderId, getDrawableId("infinario_notification_icon"));
-    }
-
-    @SuppressWarnings("unused")
-    public void enablePushNotifications(String senderId, String nameDrawable) {
-        enablePushNotifications(senderId, getDrawableId(nameDrawable));
+    public void enableGooglePushNotifications(String senderId) {
+        enableGooglePushNotifications(senderId, getDrawableId("infinario_notification_icon"));
     }
 
     /**
-     * Disables receiving of push notifications to the app from an Infinario scenario.
+     * @deprecated  As of release 1.1.0, replaced by {@link #enableGooglePushNotifications(String senderId, String nameDrawable)}
+     */
+    @Deprecated
+    public void enablePushNotifications(String senderId, String nameDrawable){
+        this.enableGooglePushNotifications(senderId, nameDrawable);
+    }
+
+    @SuppressWarnings("unused")
+    public void enableGooglePushNotifications(String senderId, String nameDrawable) {
+        enableGooglePushNotifications(senderId, getDrawableId(nameDrawable));
+    }
+
+    /**
+     * @deprecated  As of release 1.1.0, replaced by {@link #disableGooglePushNotifications()}
+     */
+    @Deprecated
+    public void disablePushNotifications(){
+        this.disableGooglePushNotifications();
+    }
+
+    /**
+     * Disables receiving of google push notifications to the app from an Infinario scenario.
      */
     @SuppressWarnings("unused")
-    public void disablePushNotifications() {
-        preferences.setPushNotifications(false);
+    public void disableGooglePushNotifications() {
+        preferences.setGooglePushNotifications(false);
     }
 
     /**
@@ -500,10 +540,10 @@ public class Infinario {
      * @param context application's context
      * @param intent received intent from a broadcast receiver.
      */
-    public static void handlePushNotification(Context context, Intent intent) {
+    public static void handleGooglePushNotification(Context context, Intent intent) {
         Preferences preferences = Preferences.get(context);
 
-        if (preferences.getPushNotifications() && checkPlayServices(context)) {
+        if (preferences.getGooglePushNotifications() && checkPlayServices(context)) {
             GoogleCloudMessaging gcm = GoogleCloudMessaging.getInstance(context);
             Bundle extras = intent.getExtras();
             String messageType = gcm.getMessageType(intent);
@@ -676,7 +716,7 @@ public class Infinario {
     private void sendRegistrationIdToBackend() {
         Log.i(Contract.TAG, "Sending registration ID to backend");
         Map<String, Object> properties = new HashMap<>();
-        properties.put(Contract.DB_REGISTRATION_ID, registrationId);
+        properties.put(Contract.DB_GOOGLE_REGISTRATION_ID, registrationId);
         update(properties);
     }
 

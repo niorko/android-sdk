@@ -86,7 +86,7 @@ Installation event is fired <strong>only once</strong> for the whole lifetime of
 </p>
 
 <pre><code>{
-  "campaign": "Advertisement on my website",
+  "campaign_name": "Advertisement on my website",
   "campaign_id": "ui9fj4i93jf9083094fj9043",
   "link": "https://play.google.com/store/...",
   "device_model": "LGE Nexus 5",
@@ -118,7 +118,7 @@ Identification event is tracked each time the <code>identify()</code> method is 
 <h3>Payments for Google Play Store</h3>
 
 <p>
-In order to use the automatic payment tracking, the INFINARIO Android SDK needs to know when a purchase flow has finished. After the player goes through the whole purchase process, Android calls <code>onActivityResult</code> method on the activity which started the purchase flow. That is the place in the game code where INFINARIO Android SDK instance needs to get notified about the purchase using the <code>trackPurchases(int, Intent)</code> method. For more details, please refer to the sample code below:
+In order to use the automatic payment tracking, the INFINARIO Android SDK needs to know when a purchase flow has finished. After the player goes through the whole purchase process, Android calls <code>onActivityResult</code> method on the activity which started the purchase flow. That is the place in the game code where INFINARIO Android SDK instance needs to get notified about the purchase using the <code>trackGooglePurchases(int, Intent)</code> method. For more details, please refer to the sample code below:
 </p>
 
 <pre><code>// override this method in each activity which starts the purchase flow
@@ -128,7 +128,7 @@ protected void onActivityResult(int requestCode, int resultCode, Intent data) {
     if (infinario != null) {
         // pass resultCode and the intent, INFINARIO Android SDK automatically
         // determines whether this is a purchase intent or not
-        infinario.trackPurchases(resultCode, data);
+        infinario.trackGooglePurchases(resultCode, data);
     }
 }
 </code></pre>
@@ -200,7 +200,7 @@ Purchase events (called <code>hard_purchase</code>) contain all basic informatio
 }
 </code></pre>
 
-<h2>Push notifications</h2>
+<h2>Google Push notifications</h2>
 Infinario web application allows you to easily create complex scenarios which you can use to send push notifications directly to your customers. The following section explains how to enable receiving push notifications in the Infinario Andriod SDK.
 
 For push notifications to work, you need a working Google API project. The following steps show you how to create one. If you already have created a Google API project and you have your <strong>project number (or sender ID)</strong> and <strong>Google Cloud Messaging API key</strong>, you may skip this part of the tutorial and proceed directly to <a href="#infinario-web-app">enabling of the push notifications</a> in the Infinario Android SDK.
@@ -221,11 +221,11 @@ For push notifications to work, you need a working Google API project. The follo
 Once you have obtained <strong>Google Cloud Messaging API key</strong>, you need to enter it in the input field on the <strong>Company / Settings / Notifications</strong> in the Infinario web application.
 
 <h3>Infinario Android SDK</h3>
-By default, receiving of push notifications is disabled. You can enable them by calling the method <code>enablePushNotifications()</code>. Please note that this method needs to be called only once. Push notifications remain enabled until the opposite method, <code>disablePushNotifications()</code> is called. Method <code>enablePushNotifications()</code> has one mandatory argument <code>String senderId</code> or <strong>Project number</strong>. The <strong>Project number</strong> can be obtained from <strong>Project Dashboard</strong> of your <strong>Google API project</strong> at <a href="https://console.developers.google.com/">https://console.developers.google.com/</a>. <code>enablePushNotifications()</code> has one optional argument <code>int iconDrawable</code> which is ID of the icon drawable which should be used as icon in the Android notification.
+By default, receiving of push notifications is disabled. You can enable them by calling the method <code>enableGooglePushNotifications()</code>. Please note that this method needs to be called only once. Push notifications remain enabled until the opposite method, <code>disableGooglePushNotifications()</code> is called. Method <code>enableGooglePushNotifications()</code> has one mandatory argument <code>String senderId</code> or <strong>Project number</strong>. The <strong>Project number</strong> can be obtained from <strong>Project Dashboard</strong> of your <strong>Google API project</strong> at <a href="https://console.developers.google.com/">https://console.developers.google.com/</a>. <code>enableGooglePushNotifications()</code> has one optional argument <code>int iconDrawable</code> which is ID of the icon drawable which should be used as icon in the Android notification.
 <pre><code>String senderId = "your project number";
 
 // Enable push notifications using given icon
-infinario.enablePushNotifications(senderId, R.drawable.icon);
+infinario.enableGooglePushNotifications(senderId, R.drawable.icon);
 </code></pre>
 <h2>Flushing events</h2>
 All tracked events are stored in the internal SQL database in the Android app. By default, Infinario Android SDK automagically takes care of flushing events to the Infinario API. This feature can be turned off with method <code>disableAutomaticFlushing()</code> which takes no arguments. Please be careful with turning automatic flushing off because if you turn it off, you need to manually call <code>Infinario.flush(context);</code> to flush the tracked events manually everytime there is something to flush.

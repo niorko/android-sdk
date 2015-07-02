@@ -10,6 +10,6 @@ public class GcmIntentService extends IntentService {
 
     @Override
     protected void onHandleIntent(Intent intent) {
-        Infinario.handlePushNotification(this, intent);
+        Infinario.handleGooglePushNotification(this, intent);
     }
 }

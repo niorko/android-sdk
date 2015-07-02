@@ -30,7 +30,7 @@ public class Contract {
     public static final String PROPERTY_SENDER_ID = "sender_id";
     public static final String PROPERTY_TARGET = "target";
     public static final String PROPERTY_AUTO_FLUSH = "auto_flush";
-    public static final String PROPERTY_PUSH_NOTIFICATIONS = "push_notifications";
+    public static final String PROPERTY_GOOGLE_PUSH_NOTIFICATIONS = "google_push_notifications";
     public static final String PROPERTY_ICON = "icon";
     public static final String PROPERTY_REFERRER = "referrer";
     public static final String PROPERTY_TOKEN = "token";
@@ -38,7 +38,7 @@ public class Contract {
     public static final String PROPERTY_SESSION_START = "session_start";
     public static final String PROPERTY_SESSION_END = "session_end";
     public static final String EXTRA_REQUEST_CODE = "request_code";
-    public static final String PROPERTY_GOOGLE_ADV_ID = "google_adv_id";
+    public static final String PROPERTY_GOOGLE_ADV_ID = "google_advertising_id";
 
     /**
      * Cookie ID negotiation
@@ -48,7 +48,7 @@ public class Contract {
     /**
      * Infinario admin details
      */
-    public static final String DB_REGISTRATION_ID = "__android_registration_id";
+    public static final String DB_GOOGLE_REGISTRATION_ID = "google_push_notification_id";
 
     /**
      * Command details

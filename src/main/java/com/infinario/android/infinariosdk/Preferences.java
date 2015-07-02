@@ -191,19 +191,19 @@ public class Preferences {
     /**
      * Checks the state of push notifications.
      *
-     * @return true if push notifications are enabled, false otherwise
+     * @return true if google push notifications are enabled, false otherwise
      */
-    public boolean getPushNotifications() {
-        return getPreferences(context).getBoolean(Contract.PROPERTY_PUSH_NOTIFICATIONS, Contract.DEFAULT_PUSH_NOTIFICATIONS);
+    public boolean getGooglePushNotifications() {
+        return getPreferences(context).getBoolean(Contract.PROPERTY_GOOGLE_PUSH_NOTIFICATIONS, Contract.DEFAULT_PUSH_NOTIFICATIONS);
     }
 
     /**
-     * Stores status of push notifications in preferences.
+     * Stores status of google push notifications in preferences.
      *
      * @param value enabled / disabled
      */
-    public void setPushNotifications(boolean value) {
-        getPreferences(context).edit().putBoolean(Contract.PROPERTY_PUSH_NOTIFICATIONS, value).commit();
+    public void setGooglePushNotifications(boolean value) {
+        getPreferences(context).edit().putBoolean(Contract.PROPERTY_GOOGLE_PUSH_NOTIFICATIONS, value).commit();
     }
 
     /**
@@ -226,7 +226,7 @@ public class Preferences {
         // since the existing regID is not guaranteed to work with the new
         // app version.
         int registeredVersion = prefs.getInt(Contract.PROPERTY_APP_VERSION, Integer.MIN_VALUE);
-        int currentVersion = getAppVersion();
+        int currentVersion = getAppVersionCode();
 
         if (registeredVersion != currentVersion) {
             Log.i(Contract.TAG, "App version changed.");
@@ -243,7 +243,7 @@ public class Preferences {
      * @param registrationId registration ID
      */
     public void setRegistrationId(String registrationId) {
-        int appVersion = getAppVersion();
+        int appVersion = getAppVersionCode();
         Log.i(Contract.TAG, "Saving regId on app version " + appVersion);
 
         getPreferences(context)
@@ -358,7 +358,7 @@ public class Preferences {
      *
      * @return Application's version code from the {@code PackageManager}.
      */
-    private int getAppVersion() {
+    private int getAppVersionCode() {
         try {
             PackageInfo packageInfo = context.getPackageManager().getPackageInfo(context.getPackageName(), 0);
             return packageInfo.versionCode;
@@ -378,7 +378,7 @@ public class Preferences {
                 .remove(Contract.PROPERTY_APP_VERSION)
                 .remove(Contract.PROPERTY_REG_ID)
                 .remove(Contract.PROPERTY_ICON)
-                .remove(Contract.PROPERTY_PUSH_NOTIFICATIONS)
+                .remove(Contract.PROPERTY_GOOGLE_PUSH_NOTIFICATIONS)
                 .remove(Contract.PROPERTY_SENDER_ID)
                 .remove(Contract.PROPERTY_AUTO_FLUSH)
                 .remove(Contract.PROPERTY_SESSION_START)
