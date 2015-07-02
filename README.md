@@ -205,6 +205,12 @@ Purchase events (called <code>hard_purchase</code>) contain all basic informatio
 }
 </code></pre>
 
+<h2>Virtual payment</h2>
+
+<p>If you use in your project some virtual payments (e.g. purchase with in-game gold, coins, ...), now you can track them with simple call <code>trackVirtualPayment</code>.</p>
+
+<pre><code>Infinario.trackVirtualPayment(String currency, int amount, String itemName, String itemType);</code></pre>
+
 <h2>Google Push notifications</h2>
 Infinario web application allows you to easily create complex scenarios which you can use to send push notifications directly to your customers. The following section explains how to enable receiving push notifications in the Infinario Andriod SDK.
 

@@ -385,6 +385,15 @@ public class Infinario {
         }
     }
 
+    public void trackVirtualPayment(String currency, int amount, String itemName, String itemType){
+        Map<String, Object> virtualPayment = Device.deviceProperties(preferences);
+        virtualPayment.put("currency", currency);
+        virtualPayment.put("amount", amount);
+        virtualPayment.put("item_name", itemName);
+        virtualPayment.put("item_type", itemType);
+        track("virtual_payment", virtualPayment);
+    }
+
     /**
      * Flushes the updates / events to Infinario API asynchronously.
      */
