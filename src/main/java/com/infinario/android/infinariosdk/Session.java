@@ -82,6 +82,10 @@ public class Session {
 
     public Map<String, Object> defaultProperties(long duration) {
         Map<String, Object> properties = Device.deviceProperties(preferences);
+        String appVersionName = preferences.getAppVersionName();
+        if (appVersionName != null){
+            properties.put("app_version", appVersionName);
+        }
 
         if (duration != -1) {
             properties.put("duration", duration);

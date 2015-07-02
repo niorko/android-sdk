@@ -77,6 +77,7 @@ Session is a time spent in the game, it starts when the game is launched and end
   "os_version": "5.0.1",
   "sdk": "AndroidSDK",
   "sdk_version": "1.0.7"
+  "app_version": "1.0.0"
 }
 </code></pre>
 

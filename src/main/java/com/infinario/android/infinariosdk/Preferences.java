@@ -385,6 +385,20 @@ public class Preferences {
     }
 
     /**
+     * Gets app's version name.
+     *
+     * @return Application's version name from the {@code PackageManager}.
+     */
+    public String getAppVersionName() {
+        try {
+            PackageInfo pInfo = context.getPackageManager().getPackageInfo(context.getPackageName(), PackageManager.GET_META_DATA);
+            return pInfo.versionName;
+        } catch (PackageManager.NameNotFoundException e) {
+            return null;
+        }
+    }
+
+    /**
      * Clears cached information from device's memory (registration id, app version,
      * cookie ID)
      */
