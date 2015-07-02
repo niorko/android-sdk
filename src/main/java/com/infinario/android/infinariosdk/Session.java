@@ -80,8 +80,8 @@ public class Session {
         ping(false, null);
     }
 
-    public static Map<String, Object> defaultProperties(long duration) {
-        Map<String, Object> properties = Device.deviceProperties();
+    public Map<String, Object> defaultProperties(long duration) {
+        Map<String, Object> properties = Device.deviceProperties(preferences);
 
         if (duration != -1) {
             properties.put("duration", duration);
@@ -90,7 +90,7 @@ public class Session {
         return properties;
     }
 
-    public static Map<String, Object> defaultProperties() {
+    public Map<String, Object> defaultProperties() {
         return defaultProperties(-1);
     }
 }

@@ -302,6 +302,22 @@ public class Preferences {
     }
 
     /**
+     * Gets device type from preferences.
+     *
+     * @return mobile / tablet
+     */
+    public String getDeviceType(){
+        return getPreferences(context).getString(Contract.PROPERTY_DEVICE_TYPE,"");
+    }
+
+    /**
+     * Sets device type (mobile / tablet) in preferences.
+     */
+    public void setDeviceType(String value){
+        getPreferences(context).edit().putString(Contract.PROPERTY_DEVICE_TYPE, value).commit();
+    }
+
+    /**
      * Ensures cookie ID is available. Negotiates one if necessary.
      *
      * @return availability of cookie ID
@@ -324,7 +340,7 @@ public class Preferences {
             Customer customer = new Customer(ids, token, null);
 
             data = customer.getData();
-            data.put("device", Device.deviceProperties());
+            data.put("device", Device.deviceProperties(instance));
             data.put("campaign_id", getReferrer());
 
             HttpHelper http = new HttpHelper(getTarget());
@@ -386,6 +402,7 @@ public class Preferences {
                 .remove(Contract.COOKIE)
                 .remove(Contract.CAMPAIGN_COOKIE)
                 .remove(Contract.PROPERTY_GOOGLE_ADV_ID)
+                .remove(Contract.PROPERTY_DEVICE_TYPE)
                 .commit();
     }
 }

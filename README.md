@@ -71,6 +71,7 @@ Session is a time spent in the game, it starts when the game is launched and end
 <pre><code>{
   "duration": 125,
   "device_model": "LGE Nexus 5",
+  "device_type": "mobile",
   "ip": "10.0.1.58",
   "os_name": "Android",
   "os_version": "5.0.1",
@@ -90,6 +91,7 @@ Installation event is fired <strong>only once</strong> for the whole lifetime of
   "campaign_id": "ui9fj4i93jf9083094fj9043",
   "link": "https://play.google.com/store/...",
   "device_model": "LGE Nexus 5",
+  "device_type": "mobile",
   "ip": "10.0.1.58",
   "os_name": "Android",
   "os_version": "5.0.1",
@@ -107,6 +109,7 @@ Identification event is tracked each time the <code>identify()</code> method is 
 <pre><code>{
   "registered": "player@email.com",
   "device_model": "LGE Nexus 5",
+  "device_type": "mobile",
   "ip": "10.0.1.58",
   "os_name": "Android",
   "os_version": "5.0.1",
@@ -192,6 +195,7 @@ Purchase events (called <code>hard_purchase</code>) contain all basic informatio
   "item_id": "android.test.purchased",
   "item_title": "Silver sword",
   "device_model": "LGE Nexus 5",
+  "device_type": "mobile",
   "ip": "10.0.1.58",
   "os_name": "Android",
   "os_version": "5.0.1",

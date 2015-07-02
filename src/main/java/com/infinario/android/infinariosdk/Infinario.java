@@ -8,12 +8,14 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.res.Configuration;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.RemoteException;
 import android.support.v4.app.NotificationCompat;
+import android.util.DisplayMetrics;
 import android.util.Log;
 
 import com.google.android.gms.ads.identifier.AdvertisingIdClient;
@@ -80,6 +82,10 @@ public class Infinario {
 
         if (preferences.getGoogleAdvertisingId().isEmpty()){
             initializeGoogleAdvertisingId();
+        }
+
+        if (preferences.getDeviceType().isEmpty()){
+            initializeDeviceType();
         }
 
         this.customer = customer;
@@ -166,7 +172,7 @@ public class Infinario {
     public void identify(Map<String, String> customer, Map<String, Object> properties) {
         if (customer.containsKey(Contract.REGISTERED)) {
             this.customer.put(Contract.REGISTERED, customer.get(Contract.REGISTERED));
-            Map<String, Object> identificationProperties = Device.deviceProperties();
+            Map<String, Object> identificationProperties = Device.deviceProperties(preferences);
             identificationProperties.put(Contract.REGISTERED, customer.get(Contract.REGISTERED));
             track("identification", identificationProperties);
             update(properties);
@@ -329,7 +335,7 @@ public class Infinario {
                         }
 
                         if (details != null) {
-                            Map<String, Object> properties = Device.deviceProperties();
+                            Map<String, Object> properties = Device.deviceProperties(preferences);
 
                             properties.put("gross_amount", details.getPrice());
                             properties.put("currency", details.getCurrency());
@@ -356,7 +362,7 @@ public class Infinario {
     }
 
     public void trackAmazonPurchases(JSONObject amazonJsonPurchaseResponse){
-        Map<String, Object> properties = Device.deviceProperties();
+        Map<String, Object> properties = Device.deviceProperties(preferences);
         properties.put("payment_system", "Amazon Store");
         try {
             String sku = amazonJsonPurchaseResponse.getJSONObject("receipt").getString("sku");
@@ -583,7 +589,7 @@ public class Infinario {
             void onSessionStart(long timestamp) {
                 Log.d(Contract.TAG, "session started");
 
-                Map<String, Object> properties = Session.defaultProperties();
+                Map<String, Object> properties = session.defaultProperties();
                 properties.putAll(sessionProperties);
 
                 track("session_start", properties, timestamp);
@@ -593,7 +599,7 @@ public class Infinario {
             void onSessionEnd(long timestamp, long duration) {
                 Log.d(Contract.TAG, "session finished, duration = " + duration);
 
-                Map<String, Object> properties = Session.defaultProperties(duration);
+                Map<String, Object> properties = session.defaultProperties(duration);
                 properties.putAll(sessionProperties);
 
                 track("session_end", properties, timestamp);
@@ -843,5 +849,35 @@ public class Infinario {
             }
         }
         return new String[]{currency.toString(),price.substring(currency.length())};
+    }
+
+    /**
+     * Check if device is mobile or tablet
+     */
+    private void initializeDeviceType() {
+        try{
+            boolean device_large = ((context.getResources().getConfiguration().screenLayout &
+                    Configuration.SCREENLAYOUT_SIZE_MASK) >=
+                    Configuration.SCREENLAYOUT_SIZE_LARGE);
+
+            if (device_large) {
+                DisplayMetrics metrics = new DisplayMetrics();
+                Activity activity = (Activity) context;
+                activity.getWindowManager().getDefaultDisplay().getMetrics(metrics);
+
+                if (metrics.densityDpi == DisplayMetrics.DENSITY_DEFAULT
+                        || metrics.densityDpi == DisplayMetrics.DENSITY_HIGH
+                        || metrics.densityDpi == DisplayMetrics.DENSITY_MEDIUM
+                        || metrics.densityDpi == DisplayMetrics.DENSITY_TV
+                        || metrics.densityDpi == DisplayMetrics.DENSITY_XHIGH) {
+
+                    preferences.setDeviceType("tablet");
+                    return;
+                }
+            }
+            preferences.setDeviceType("mobile");
+        } catch (Exception e){
+            Log.d(Contract.TAG, "Cannot initialize device type");
+        }
     }
 }
