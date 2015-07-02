@@ -19,17 +19,28 @@ import java.util.Set;
  */
 public class DbQueue {
     private SQLiteDatabase db;
+    private DbHelper dbHelper;
     private String[] allColumns = { Contract.COLUMN_ID, Contract.COLUMN_COMMAND, Contract.COLUMN_RETRIES};
+    private Object lockAccess;
+    private int openCounter;
 
     public DbQueue(Context context) {
-        DbHelper dbHelper = new DbHelper(context);
-        db = dbHelper.getWritableDatabase();
+        dbHelper = new DbHelper(context);
+        lockAccess = new Object();
+        openCounter = 0;
     }
 
     public boolean schedule(Command command) {
-        ContentValues values = new ContentValues();
-        values.put(Contract.COLUMN_COMMAND, command.toString());
-        return -1 < db.insert(Contract.TABLE_COMMANDS, null, values);
+        synchronized (lockAccess){
+            openDatabase();
+            try{
+                ContentValues values = new ContentValues();
+                values.put(Contract.COLUMN_COMMAND, command.toString());
+                return -1 < db.insert(Contract.TABLE_COMMANDS, null, values);
+            } finally {
+                closeDatabase();
+            }
+        }
     }
 
     public List<Request> pop(Integer limit) {
@@ -50,28 +61,64 @@ public class DbQueue {
     }
 
     public List<Request> pop() {
-        return pop(Contract.DEFAULT_LIMIT);
+        synchronized (lockAccess){
+            openDatabase();
+            try{
+                return pop(Contract.DEFAULT_LIMIT);
+            } finally {
+                closeDatabase();
+            }
+        }
     }
 
     public boolean isEmpty() {
-        Cursor cursor = db.rawQuery("SELECT COUNT(*) FROM " + Contract.TABLE_COMMANDS, null);
-        boolean result = !(cursor.moveToFirst() && cursor.getInt(0) > 0);
-        cursor.close();
-        return result;
+        synchronized (lockAccess){
+            openDatabase();
+            try{
+                Cursor cursor = db.rawQuery("SELECT COUNT(*) FROM " + Contract.TABLE_COMMANDS, null);
+                boolean result = !(cursor.moveToFirst() && cursor.getInt(0) > 0);
+                cursor.close();
+                return result;
+            } finally {
+                closeDatabase();
+            }
+        }
+
     }
 
     public void clear(Set<Integer> successful, Set<Integer> failed) {
-        try{
-            db.delete(Contract.TABLE_COMMANDS, Contract.COLUMN_ID + " IN (" + TextUtils.join(", ", successful) + ")", null);
+        synchronized (lockAccess){
+            openDatabase();
+            try{
+                db.delete(Contract.TABLE_COMMANDS, Contract.COLUMN_ID + " IN (" + TextUtils.join(", ", successful) + ")", null);
 
-            db.execSQL(
-                    "UPDATE " + Contract.TABLE_COMMANDS + " "
-                            + "SET " + Contract.COLUMN_RETRIES + " = " + Contract.COLUMN_RETRIES + " + 1 "
-                            + "WHERE " + Contract.COLUMN_ID + " IN (" + TextUtils.join(", ", failed) + ")");
+                db.execSQL(
+                        "UPDATE " + Contract.TABLE_COMMANDS + " "
+                                + "SET " + Contract.COLUMN_RETRIES + " = " + Contract.COLUMN_RETRIES + " + 1 "
+                                + "WHERE " + Contract.COLUMN_ID + " IN (" + TextUtils.join(", ", failed) + ")");
 
-            db.delete(Contract.TABLE_COMMANDS, Contract.COLUMN_RETRIES + " > " + Contract.MAX_RETRIES, null);
-        } catch (SQLiteDatabaseLockedException e){
-            Log.e(Contract.TAG, "Infinario catch SQLiteDabaseLockedException");
+                db.delete(Contract.TABLE_COMMANDS, Contract.COLUMN_RETRIES + " > " + Contract.MAX_RETRIES, null);
+            } finally {
+                closeDatabase();
+            }
+        }
+    }
+
+    private void openDatabase(){
+        synchronized (lockAccess){
+            openCounter++;
+            if (openCounter == 1){
+                db = dbHelper.getWritableDatabase();
+            }
+        }
+    }
+
+    private void closeDatabase(){
+        synchronized (lockAccess){
+            openCounter--;
+            if (openCounter == 0){
+                db.close();
+            }
         }
     }
 }
