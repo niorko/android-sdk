@@ -21,11 +21,13 @@ public class CommandManager {
     DbQueue queue;
     HttpHelper http;
     Preferences preferences;
+    Object lockFlush;
 
     public CommandManager(Context context, String target) {
         queue = new DbQueue(context);
         http = new HttpHelper(target);
         preferences = Preferences.get(context);
+        lockFlush = new Object();
     }
 
     public boolean schedule(Command command) {
@@ -103,15 +105,17 @@ public class CommandManager {
         return successfulRequests.size() > 0 || failedRequests.size() > 0;
     }
 
-    public synchronized void flush() {
-        int retries = MAX_RETRIES;
+    public void flush() {
+        synchronized (lockFlush){
+            int retries = MAX_RETRIES;
 
-        while (retries > 0) {
-            if (!executeBatch()) {
-                if (queue.isEmpty()) {
-                    break;
-                } else {
-                    --retries;
+            while (retries > 0) {
+                if (!executeBatch()) {
+                    if (queue.isEmpty()) {
+                        break;
+                    } else {
+                        --retries;
+                    }
                 }
             }
         }
