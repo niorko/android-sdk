@@ -30,6 +30,7 @@ import org.json.JSONObject;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -51,6 +52,8 @@ public class Infinario {
     private IabHelper iabHelper = null;
     private Map<String, Object> sessionProperties;
     private JSONObject amazonProduct;
+    private long sessionStart = -1;
+    private long sessionEnd = -1;
 
     private Infinario(Context context, String token, String target, Map<String, String> customer) {
         this.token = token;
@@ -89,7 +92,10 @@ public class Infinario {
         }
 
         this.customer = customer;
-        setupSession();
+        //setupSession();
+        if (sessionStart == -1){
+            trackSessionStart();
+        }
     }
 
     /**
@@ -227,6 +233,32 @@ public class Infinario {
         }
 
         return false;
+    }
+
+    private void trackSessionStart(){
+        sessionStart = (new Date()).getTime();
+        Map<String, Object> properties = Device.deviceProperties(preferences);
+        String appVersionName = preferences.getAppVersionName();
+        if (appVersionName != null){
+            properties.put("app_version", appVersionName);
+        }
+        track("session_start", properties, sessionStart);
+    }
+
+    public void trackSessionEnd(){
+        if (instance != null && sessionStart != -1){
+            sessionEnd = (new Date()).getTime();
+            if (sessionEnd >= sessionStart){
+                Map<String, Object> properties = Device.deviceProperties(preferences);
+                String appVersionName = preferences.getAppVersionName();
+                if (appVersionName != null){
+                    properties.put("app_version", appVersionName);
+                }
+                properties.put("duration", (sessionEnd - sessionStart) / 1000L);
+                sessionStart = -1;
+                track("session_end", properties, sessionEnd);
+            }
+        }
     }
 
     /**
@@ -592,7 +624,8 @@ public class Infinario {
        return customer_ids;
     }
 
-    private void setupSession() {
+    /** Disable session listener
+     * private void setupSession() {
         session = new Session(preferences, new SessionListener() {
             @Override
             void onSessionStart(long timestamp) {
@@ -622,6 +655,7 @@ public class Infinario {
 
         session.run();
     }
+     */
 
     /**
      * Sets up delayed alarm for automatic flushing of events. Each call to {@code track()} or

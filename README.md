@@ -65,7 +65,7 @@ INFINARIO Android SDK automatically tracks some events on its own. Automatic eve
 
 <h3>Sessions</h3>
 <p>
-Session is a time spent in the game, it starts when the game is launched and ends when the game gets dismissed from recent apps or is freed from memory in another way. Automatic tracking of sessions produces two events, <code>session_start</code> and <code>session_end</code>. Both events contain the timestamp of the occurence together with basic attributes about the device (OS, OS version, SDK, SDK version and device model). Event <code>session_end</code> contains also the duration of the session in seconds. Example of <code>session_end</code> event attributes in <em>JSON</em> format:
+Session is a time spent in the game, it starts when the game is launched and ends when the game gets dismissed from recent apps. Automatic tracking of sessions produces two events, <code>session_start</code> and <code>session_end</code>. (To end current session, add <code>trackSessionEnd()</code> to <code>Stop()</code> method in main activity) Both events contain the timestamp of the occurence together with basic attributes about the device (OS, OS version, SDK, SDK version and device model). Event <code>session_end</code> contains also the duration of the session in seconds. Example of <code>session_end</code> event attributes in <em>JSON</em> format:
 </p>
 
 <pre><code>{
