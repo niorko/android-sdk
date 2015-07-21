@@ -426,6 +426,40 @@ public class Infinario {
         track("virtual_payment", virtualPayment);
     }
 
+    private void trackLogError(String tag, String message){
+        trackLog("log_error", tag, message, null);
+    }
+
+    private void trackLogError(String tag, String message, HashMap<String, Object> properties){
+        trackLog("log_error", tag, message, properties);
+    }
+
+    private void trackLogWarning(String tag, String message){
+        trackLog("log_warning", tag, message, null);
+    }
+
+    private void trackLogWarning(String tag, String message, HashMap<String, Object> properties){
+        trackLog("log_warning", tag, message, properties);
+    }
+
+    private void trackLogDebug(String tag, String message){
+        trackLog("log_debug", tag, message, null);
+    }
+
+    private void trackLogDebug(String tag, String message, HashMap<String, Object> properties){
+        trackLog("log_debug", tag, message, properties);
+    }
+
+    private void trackLog(String type, String tag, String message, HashMap<String, Object> properties){
+        HashMap<String, Object> logMessage = new HashMap<>();
+        logMessage.put("tag", tag);
+        logMessage.put("message", message);
+        if (properties != null){
+            logMessage.putAll(properties);
+        }
+        track(type, logMessage);
+    }
+
     /**
      * Flushes the updates / events to Infinario API asynchronously.
      */
@@ -874,6 +908,7 @@ public class Infinario {
                     update(advId);
                 } catch (Exception e) {
                     Log.e(Contract.TAG, "Cannot initialize google advertising ID");
+                    trackLogError(Contract.TAG, e.toString());
                 }
             }
         }).start();
@@ -921,6 +956,7 @@ public class Infinario {
             preferences.setDeviceType("mobile");
         } catch (Exception e){
             Log.d(Contract.TAG, "Cannot initialize device type");
+            trackLogError(Contract.TAG, e.toString());
         }
     }
 }
