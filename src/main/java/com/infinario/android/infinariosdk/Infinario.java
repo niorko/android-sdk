@@ -908,7 +908,6 @@ public class Infinario {
                     update(advId);
                 } catch (Exception e) {
                     Log.e(Contract.TAG, "Cannot initialize google advertising ID");
-                    trackLogError(Contract.TAG, e.toString());
                 }
             }
         }).start();
@@ -956,7 +955,6 @@ public class Infinario {
             preferences.setDeviceType("mobile");
         } catch (Exception e){
             Log.d(Contract.TAG, "Cannot initialize device type");
-            trackLogError(Contract.TAG, e.toString());
         }
     }
 }
