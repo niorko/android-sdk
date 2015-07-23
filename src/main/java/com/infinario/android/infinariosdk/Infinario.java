@@ -938,23 +938,14 @@ public class Infinario {
                     Configuration.SCREENLAYOUT_SIZE_LARGE);
 
             if (device_large) {
-                DisplayMetrics metrics = new DisplayMetrics();
-                Activity activity = (Activity) context;
-                activity.getWindowManager().getDefaultDisplay().getMetrics(metrics);
-
-                if (metrics.densityDpi == DisplayMetrics.DENSITY_DEFAULT
-                        || metrics.densityDpi == DisplayMetrics.DENSITY_HIGH
-                        || metrics.densityDpi == DisplayMetrics.DENSITY_MEDIUM
-                        || metrics.densityDpi == DisplayMetrics.DENSITY_TV
-                        || metrics.densityDpi == DisplayMetrics.DENSITY_XHIGH) {
-
-                    preferences.setDeviceType("tablet");
-                    return;
-                }
+                Log.d(Contract.TAG, "Detect tablet");
+                preferences.setDeviceType("tablet");
+            } else {
+                Log.d(Contract.TAG, "Detect mobile");
+                preferences.setDeviceType("mobile");
             }
-            preferences.setDeviceType("mobile");
         } catch (Exception e){
-            Log.d(Contract.TAG, "Cannot initialize device type");
+            Log.e(Contract.TAG, "Cannot initialize device type");
         }
     }
 }
