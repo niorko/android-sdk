@@ -4,7 +4,7 @@ Infinario Android SDK is available in this Git repository: <a href="https://git
 <ol>
 	<li>Download the <a href="https://github.com/infinario/android-sdk/releases">latest release</a> of the Android SDK</li>
 	<li>Unzip / untar the downloaded SDK into a preferred directory</li>
-	<li>In Android Studio, click <strong>File -&gt; Import Module...</strong></li>
+	<li>In Android Studio, click <strong>File -&gt; New -&gt; Import Module...</strong> or in older version click <strong>File -&gt; Import Module...</strong></li>
 	<li>In the opened dialog window, locate the unzipped Android SDK directory and click <strong>Finish</strong></li>
 	<li>In Android Studio, click <strong>File -&gt; Project Structure...</strong></li>
 	<li>In the opened dialog click on your <strong>app</strong> (on the left side) and open <strong>Dependencies</strong> tab</li>
