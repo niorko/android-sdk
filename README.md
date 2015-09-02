@@ -14,12 +14,12 @@ Infinario Android SDK is available in this Git repository: <a href="https://git
 After completing the steps above the Infinario Android SDK is now included in your app and ready to be used.
 <h2>Usage</h2>
 <h3>Basic Interface</h3>
-Once the IDE is set up, you may start using the Infinario library in your code. First you need to you need to know the URI of your Infinario API instance, usually <code>https://api.infinario.com</code> and your <code>companyToken</code> (located at the Company / Overview page in the web application). To interact with the Infinario SDK, you need to obtain an instance of the Infinario class using the <code>application's context</code> and <code>companyToken</code> (the URI parameter is optional):
+Once the IDE is set up, you may start using the Infinario library in your code. First you need to you need to know the URI of your Infinario API instance, usually <code>https://api.infinario.com</code> and your <code>projectToken</code> (Overview page in the web application). To interact with the Infinario SDK, you need to obtain an instance of the Infinario class using the <code>application's context</code> and <code>projectToken</code> (the URI parameter is optional):
 <pre><code>// Use public Infinario instance
-Infinario infinario = Infinario.getInstance(getApplicationContext(), companyToken);
+Infinario infinario = Infinario.getInstance(getApplicationContext(), projectToken);
 
 // Use custom Infinario instance
-Infinario infinario = Infinario.getInstance(getApplicationContext(), companyToken, "http://url.to.your.instance.com");
+Infinario infinario = Infinario.getInstance(getApplicationContext(), projectToken, "http://url.to.your.instance.com");
 </code></pre>
 To start tracking, you need to identify the customer with their unique <code>customerId</code>. The unique <code>customerId</code> can either be a String, or an Map representing the <code>customerIds</code> as referenced in <a href="http://guides.infinario.com/technical-guide/rest-client-api/#Detailed_key_descriptions">the API guide</a>. Setting
 <pre><code>String customerId = "123-foo-bar"</code></pre>

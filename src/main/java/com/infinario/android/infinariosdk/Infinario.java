@@ -120,7 +120,7 @@ public class Infinario {
      * Obtains instance of Infinario instance to work with and identifies the customer.
      *
      * @param context  application's context
-     * @param token    company token obtained from Infinario admin
+     * @param token    project token obtained from Infinario admin
      * @param target   Infinario API location
      * @param customer key-value ids (cookie ID or registered ID)
      * @return Infinario instance
@@ -138,7 +138,7 @@ public class Infinario {
      * Obtains instance of Infinario instance to work with and identifies the customer.
      *
      * @param context  application's context
-     * @param token    company token obtained from Infinario admin
+     * @param token    project token obtained from Infinario admin
      * @param target   Infinario API location
      * @param customer customer's registered ID
      * @return Infinario instance
@@ -152,7 +152,7 @@ public class Infinario {
      * Obtains instance of Infinario instance to work with.
      *
      * @param context  application's context
-     * @param token    company token obtained from Infinario admin
+     * @param token    project token obtained from Infinario admin
      * @param target   Infinario API location
      * @return Infinario instance
      */
@@ -165,7 +165,7 @@ public class Infinario {
      * Obtains instance of Infinario instance to work with and identifies the customer.
      *
      * @param context  application's context
-     * @param token    company token obtained from Infinario admin
+     * @param token    project token obtained from Infinario admin
      * @param customer key-value ids (cookie ID or registered ID)
      * @return Infinario instance
      */
@@ -178,7 +178,7 @@ public class Infinario {
      * Obtains instance of Infinario instance to work with.
      *
      * @param context  application's context
-     * @param token    company token obtained from Infinario admin
+     * @param token    project token obtained from Infinario admin
      * @return Infinario instance
      */
     @SuppressWarnings("unused")
