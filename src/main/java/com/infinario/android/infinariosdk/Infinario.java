@@ -13,6 +13,7 @@ import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.RemoteException;
 import android.support.v4.app.NotificationCompat;
 import android.util.DisplayMetrics;
@@ -72,6 +73,11 @@ public class Infinario {
     private long sessionStart = -1;
     private long sessionEnd = -1;
     private SegmentListener listener;
+    private long sessionTimeOut;
+    private Object lockSessionAccess;
+    private Handler sessionHandler;
+    private Runnable sessionRunnable;
+    private int sessionCounter;
 
     private Infinario(Context context, String token, String target, Map<String, String> customer) {
         this.token = token;
@@ -81,6 +87,8 @@ public class Infinario {
         preferences.setToken(token);
 
         sessionProperties = new HashMap<>();
+        sessionTimeOut = Contract.SESSION_TIMEOUT;
+        sessionCounter = 0;
 
         if (null != target) {
             preferences.setTarget(target.replaceFirst("/*$", ""));
@@ -109,11 +117,20 @@ public class Infinario {
             initializeDeviceType();
         }
 
+        lockSessionAccess = new Object();
+
+        sessionHandler = new Handler();
+        sessionRunnable = new Runnable() {
+            public void run() {
+                synchronized (lockSessionAccess) {
+                    if (preferences.getSessionEnd() != -1) {
+                        sessionEnd(preferences.getSessionEnd(), (preferences.getSessionEnd() - preferences.getSessionStart()) / 1000L);
+                    }
+                }
+            }
+        };
+
         this.customer = customer;
-        //setupSession();
-        if (sessionStart == -1){
-            trackSessionStart();
-        }
     }
 
     /**
@@ -253,28 +270,93 @@ public class Infinario {
         return false;
     }
 
-    private void trackSessionStart(){
-        sessionStart = (new Date()).getTime();
+    private void sessionStart(long timeStamp){
+        preferences.setSessionStart(timeStamp);
+
         Map<String, Object> properties = Device.deviceProperties(preferences);
         String appVersionName = preferences.getAppVersionName();
         if (appVersionName != null){
             properties.put("app_version", appVersionName);
         }
-        track("session_start", properties, sessionStart);
+
+        track("session_start", properties, timeStamp);
+    }
+
+    private void sessionEnd(long timeStamp, long duration){
+        Map<String, Object> properties = Device.deviceProperties(preferences);
+        String appVersionName = preferences.getAppVersionName();
+        if (appVersionName != null){
+            properties.put("app_version", appVersionName);
+        }
+        properties.put("duration", duration);
+
+        track("session_end", properties, timeStamp);
+
+        preferences.setSessionStart(-1);
+        preferences.setSessionEnd(-1);
+    }
+
+    public void trackSessionStartImpl(){
+        synchronized (lockSessionAccess){
+            long now = (new Date()).getTime();
+            long sessionEnd = preferences.getSessionEnd();
+            long sessionStart = preferences.getSessionStart();
+
+            if (sessionHandler != null){
+                sessionHandler.removeCallbacks(sessionRunnable);
+            }
+
+            if (sessionEnd != -1){
+                if (now - sessionEnd > sessionTimeOut){
+                    //Create session end
+                    sessionEnd(sessionEnd, (sessionEnd - sessionStart) / 1000L);
+                    //Create session start
+                    sessionStart(now);
+                } else {
+                    //Continue in current session
+                }
+            } else  if (sessionStart == -1){
+                //Create session start
+                sessionStart(now);
+            } else {
+                //Continue in current session
+            }
+        }
+    }
+
+    public void trackSessionEndImpl(){
+        synchronized (lockSessionAccess){
+            if (preferences.getSessionEnd() != -1){
+                //Save session end with current timestamp and start count TIMEOUT
+                preferences.setSessionEnd((new Date()).getTime());
+                sessionHandler.postDelayed(sessionRunnable, sessionTimeOut);
+            }
+
+        }
+    }
+
+    public void setSessionTimeOut(long value) {
+        sessionTimeOut = value;
+    }
+
+    public void trackSessionStart(){
+        synchronized (lockSessionAccess){
+            sessionCounter += 1;
+
+            if (sessionCounter  == 1){
+                trackSessionStartImpl();
+            }
+        }
     }
 
     public void trackSessionEnd(){
-        if (instance != null && sessionStart != -1){
-            sessionEnd = (new Date()).getTime();
-            if (sessionEnd >= sessionStart){
-                Map<String, Object> properties = Device.deviceProperties(preferences);
-                String appVersionName = preferences.getAppVersionName();
-                if (appVersionName != null){
-                    properties.put("app_version", appVersionName);
-                }
-                properties.put("duration", (sessionEnd - sessionStart) / 1000L);
-                sessionStart = -1;
-                track("session_end", properties, sessionEnd);
+        synchronized (lockSessionAccess){
+            if (sessionCounter > 0){
+                sessionCounter -= 1;
+            }
+
+            if (sessionCounter == 0){
+                trackSessionEndImpl();
             }
         }
     }

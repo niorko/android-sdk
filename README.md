@@ -65,7 +65,31 @@ INFINARIO Android SDK automatically tracks some events on its own. Automatic eve
 
 <h3>Sessions</h3>
 <p>
-Session is a time spent in the game, it starts when the game is launched and ends when the game gets dismissed from recent apps. Automatic tracking of sessions produces two events, <code>session_start</code> and <code>session_end</code>. (To end current session, add <code>trackSessionEnd()</code> to <code>Stop()</code> method in main activity) Both events contain the timestamp of the occurence together with basic attributes about the device (OS, OS version, SDK, SDK version and device model). Event <code>session_end</code> contains also the duration of the session in seconds. Example of <code>session_end</code> event attributes in <em>JSON</em> format:
+Session is a real time spent in the game, it starts when the game is launched and ends when the game goes to background. But if the player returns to game in 60 seconds (To change TIMEOUT value, call <code>setSessionTimeOut</code>), game will continue in current session. Tracking of sessions produces two events, <code>session_start</code> and <code>session_end</code>. To track session start call <code>trackSessionStart()</code> from where whole game gets focus (e.g. onStart method) and to track session end call <code>trackSessionEnd()</code> from where whole game loses focus (e.g. onStop method). <b>If you have more activities, put them to all activities you have.</b></p>
+<pre><code>Infiario infinario;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState){
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        infinario = Infinario.getInstance(getApplicationContext(), "projectToken");
+    }
+
+    @Override
+    protected void onStart(){
+        super.onStart();
+
+        infinario.trackSessionStart();
+    }
+
+    @Override
+    protected void onStop(){
+        super.onStop();
+
+        infinario.trackSessionEnd();
+    }</code></pre>
+<p>Both events contain the timestamp of the occurence together with basic attributes about the device (OS, OS version, SDK, SDK version and device model). Event <code>session_end</code> contains also the duration of the session in seconds. Example of <code>session_end</code> event attributes in <em>JSON</em> format:
 </p>
 
 <pre><code>{

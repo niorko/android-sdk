@@ -82,7 +82,7 @@ public class Contract {
      * Session
      */
     public static final int SESSION_PING_INTERVAL = 1; // in seconds
-    public static final int SESSION_TIMEOUT = 20 * 1000;
+    public static final int SESSION_TIMEOUT = 60 * 1000;
 
     /**
      * DbQueue controls
