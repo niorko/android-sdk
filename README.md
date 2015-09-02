@@ -211,6 +211,17 @@ Purchase events (called <code>hard_purchase</code>) contain all basic informatio
 
 <pre><code>Infinario.trackVirtualPayment(String currency, int amount, String itemName, String itemType);</code></pre>
 
+<h2>Segmentation</h2>
+
+<p>If you want to get current segment of your player, just call <code>getCurrentSegment</code>. You will need id of your segmentation and project secret token.</p>
+
+<pre><code>infinario.getCurrentSegment("segmentation_id", "project_secret", new SegmentListener() {
+    @Override
+    public void onSegmentReceive(boolean wasSuccessful, InfinarioSegment segment, String error) {
+        String name = segment.getName();
+    }
+});</code></pre>
+
 <h2>Google Push notifications</h2>
 Infinario web application allows you to easily create complex scenarios which you can use to send push notifications directly to your customers. The following section explains how to enable receiving push notifications in the Infinario Andriod SDK.
 

@@ -24,11 +24,28 @@ import com.google.android.gms.common.GooglePlayServicesUtil;
 import com.google.android.gms.gcm.GoogleCloudMessaging;
 
 
+import org.apache.http.HttpEntity;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.params.BasicHttpParams;
+import org.apache.http.params.HttpConnectionParams;
+import org.apache.http.params.HttpParams;
+import org.apache.http.protocol.HTTP;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.BufferedReader;
+import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.StringWriter;
+import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Date;
 import java.util.HashMap;
@@ -54,6 +71,7 @@ public class Infinario {
     private JSONObject amazonProduct;
     private long sessionStart = -1;
     private long sessionEnd = -1;
+    private SegmentListener listener;
 
     private Infinario(Context context, String token, String target, Map<String, String> customer) {
         this.token = token;
@@ -458,6 +476,90 @@ public class Infinario {
             logMessage.putAll(properties);
         }
         track(type, logMessage);
+    }
+
+    /**
+     * Return name of segment
+     */
+    public void getCurrentSegment(final String segmentationId, final String projectSecretToken, final SegmentListener listener){
+        this.listener = listener;
+
+        if (Preferences.get(context).getTarget().startsWith("https")){
+            new AsyncTask<Void, Void, JSONObject>(){
+
+                @Override
+                protected JSONObject doInBackground(Void... params) {
+                    HttpURLConnection connection = null;
+
+                    try {
+                        URL url = new URL(Preferences.get(context).getTarget() + Contract.SEGMENT_URL);
+                        connection = (HttpURLConnection) url.openConnection();
+                        connection.setDoOutput(true);
+                        connection.setDoInput(true);
+                        connection.setConnectTimeout(2000);
+                        connection.setReadTimeout(2000);
+                        connection.setRequestProperty("Content-Type", "application/json");
+                        connection.setRequestProperty("Accept", "application/json");
+                        connection.setRequestProperty("X-Infinario-Secret", projectSecretToken);
+
+                        connection.setRequestMethod("POST");
+
+                        JSONObject main = new JSONObject();
+                        JSONObject ids = new JSONObject();
+
+                        ids.put(Contract.COOKIE, customer.get(Contract.COOKIE));
+                        ids.put(Contract.REGISTERED, customer.get(Contract.REGISTERED));
+
+                        main.put("customer_ids", ids);
+                        main.put("analysis_id", segmentationId);
+
+                        connection.connect();
+
+                        DataOutputStream body = new DataOutputStream(connection.getOutputStream());
+                        body.writeBytes(main.toString());
+                        body.close();
+
+                        InputStream is = connection.getInputStream();
+                        BufferedReader responseBuffer = new BufferedReader(new InputStreamReader(is));
+                        StringWriter response = new StringWriter();
+                        char[] buffer = new char[1024 * 4];
+                        int n = 0;
+                        while (-1 != (n = responseBuffer.read(buffer))) {
+                            response.write(buffer, 0, n);
+                        }
+
+                        return new JSONObject(response.toString());
+                    } catch (MalformedURLException e) {
+                        Log.e(Contract.TAG, e.toString());
+                    } catch (IOException e) {
+                        Log.e(Contract.TAG, e.toString());
+                    } catch (JSONException e) {
+                        Log.e(Contract.TAG, e.toString());
+                    } finally {
+                        if (connection != null){
+                            connection.disconnect();
+                        }
+                    }
+
+                    return null;
+                }
+
+                @Override
+                protected void onPostExecute(JSONObject result){
+                    if (result != null){
+                        if (result.optBoolean("success")){
+                            listener.onSegmentReceive(true, new InfinarioSegment().setName(result.optString("segment")), null);
+                        } else {
+                            listener.onSegmentReceive(false, null, "Unsuccesfull response");
+                        }
+                    } else {
+                        listener.onSegmentReceive(false, null, "Null response");
+                    }
+                }
+            }.execute();
+        } else {
+            listener.onSegmentReceive(false, null, "Target must be https");
+        }
     }
 
     /**
@@ -947,5 +1049,12 @@ public class Infinario {
         } catch (Exception e){
             Log.e(Contract.TAG, "Cannot initialize device type");
         }
+    }
+
+    /**
+     * Listnener for segmentation
+     */
+    public interface SegmentListener{
+        void onSegmentReceive(boolean wasSuccessful, InfinarioSegment segment, String error);
     }
 }
