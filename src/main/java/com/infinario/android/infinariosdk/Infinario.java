@@ -76,6 +76,7 @@ public class Infinario {
     private Object lockSessionAccess;
     private Object lockSessionImplAccess;
     private Object lockFlushTimer;
+    private static Object lockInstance = new Object();
     private Handler sessionHandler;
     private Runnable sessionEndRunnable;
     private Runnable sessionFlushRunnable;
@@ -154,7 +155,11 @@ public class Infinario {
     @SuppressWarnings("unused")
     public static Infinario getInstance(Context context, String token, String target, Map<String, String> customer) {
         if (instance == null) {
-            instance = new Infinario(context, token, target, customer);
+            synchronized (lockInstance){
+                if (instance == null){
+                    instance = new Infinario(context, token, target, customer);
+                }
+            }
         }
 
         return instance;
