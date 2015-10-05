@@ -86,18 +86,11 @@ public class DbQueue {
 
     }
 
-    public void clear(Set<Integer> successful, Set<Integer> failed) {
+    public void clear(Set<Integer> delete) {
         synchronized (lockAccess){
             openDatabase();
             try{
-                db.delete(Contract.TABLE_COMMANDS, Contract.COLUMN_ID + " IN (" + TextUtils.join(", ", successful) + ")", null);
-
-                db.execSQL(
-                        "UPDATE " + Contract.TABLE_COMMANDS + " "
-                                + "SET " + Contract.COLUMN_RETRIES + " = " + Contract.COLUMN_RETRIES + " + 1 "
-                                + "WHERE " + Contract.COLUMN_ID + " IN (" + TextUtils.join(", ", failed) + ")");
-
-                db.delete(Contract.TABLE_COMMANDS, Contract.COLUMN_RETRIES + " > " + Contract.MAX_RETRIES, null);
+                db.delete(Contract.TABLE_COMMANDS, Contract.COLUMN_ID + " IN (" + TextUtils.join(", ", delete) + ")", null);
             } finally {
                 closeDatabase();
             }

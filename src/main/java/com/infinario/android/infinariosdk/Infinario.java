@@ -75,8 +75,10 @@ public class Infinario {
     private long sessionTimeOut;
     private Object lockSessionAccess;
     private Object lockSessionImplAccess;
+    private Object lockFlushTimer;
     private Handler sessionHandler;
     private Runnable sessionEndRunnable;
+    private Runnable sessionFlushRunnable;
     private int sessionCounter;
 
     private Infinario(Context context, String token, String target, Map<String, String> customer) {
@@ -95,10 +97,6 @@ public class Infinario {
         }
 
         commandManager = new CommandManager(context, target);
-
-        if (preferences.getAutomaticFlushing()) {
-            setupPeriodicAlarm(context);
-        }
 
         iabHelper = new IabHelper(context);
         iabHelper.startSetup(null);
@@ -119,6 +117,7 @@ public class Infinario {
 
         lockSessionAccess = new Object();
         lockSessionImplAccess = new Object();
+        lockFlushTimer = new Object();
 
         sessionHandler = new Handler();
         sessionEndRunnable = new Runnable() {
@@ -130,8 +129,17 @@ public class Infinario {
                 }
             }
         };
+        sessionFlushRunnable = new Runnable() {
+            public void run() {
+                flush();
+            }
+        };
 
         this.customer = customer;
+
+        if (preferences.getAutomaticFlushing()) {
+            startFlushTimer();
+        }
     }
 
     /**
@@ -262,7 +270,7 @@ public class Infinario {
     public boolean update(Map<String, Object> properties) {
         if (commandManager.schedule(new Customer(customer, token, properties))) {
             if (preferences.getAutomaticFlushing()) {
-                setupDelayedAlarm();
+                startFlushTimer();
             }
 
             return true;
@@ -373,7 +381,7 @@ public class Infinario {
     public boolean track(String type, Map<String, Object> properties, Long timestamp) {
         if (commandManager.schedule(new Event(customer, token, type, properties, timestamp))) {
             if (preferences.getAutomaticFlushing()) {
-                setupDelayedAlarm();
+                startFlushTimer();
             }
 
             return true;
@@ -648,53 +656,9 @@ public class Infinario {
     /**
      * Flushes the updates / events to Infinario API asynchronously.
      */
-    public static void flush(final Context context) {
-        new AsyncTask<Void, Void, Void>() {
-            @Override
-            protected Void doInBackground(Void... params) {
-                if (isConnected(context)) {
-                    CommandManager commandManager = new CommandManager(context, Preferences.get(context).getTarget());
-                    commandManager.flush();
-                    setConnectivityMonitor(context, false);
-                }
-                else {
-                    setConnectivityMonitor(context, true);
-                }
-
-                return null;
-            }
-        }.execute(null, null, null);
-    }
-
-    /**
-     * Flushes the updates / events to Infinario API asynchronously.
-     */
     @SuppressWarnings("unused")
     public void flush() {
-        flush(context);
-    }
-
-    /**
-     * Sets up periodic alarm for automatic flushing of the events. Default interval
-     * is set to 6 hours. Periodic alarm doesn't wake the device (alarm type is RTC)
-     * for better battery saving.
-     *
-     * @param context application's context
-     */
-    public static void setupPeriodicAlarm(Context context) {
-        getAlarmManager(context).setInexactRepeating(AlarmManager.RTC,
-                System.currentTimeMillis() + Contract.UPDATE_INTERVAL,
-                Contract.UPDATE_INTERVAL,
-                getAlarmIntent(context, Contract.PERIODIC_ALARM));
-    }
-
-    /**
-     * Cancels periodic alarm if it is enabled, otherwise does nothing.
-     *
-     * @param context application's context
-     */
-    public static void cancelPeriodicAlarm(Context context) {
-        getAlarmManager(context).cancel(getAlarmIntent(context, Contract.PERIODIC_ALARM));
+        commandManager.flush(Contract.MAX_RETRIES);
     }
 
     /**
@@ -703,7 +667,7 @@ public class Infinario {
     @SuppressWarnings("UnusedDeclaration")
     public void enableAutomaticFlushing() {
         preferences.setAutomaticFlushing(true);
-        setupPeriodicAlarm(context);
+        startFlushTimer();
     }
 
     /**
@@ -712,7 +676,7 @@ public class Infinario {
     @SuppressWarnings("unused")
     public void disableAutomaticFlushing() {
         preferences.setAutomaticFlushing(false);
-        cancelPeriodicAlarm(context);
+        stopFlushTimer();
     }
 
     /**
@@ -843,88 +807,6 @@ public class Infinario {
        return customer_ids;
     }
 
-    /** Disable session listener
-     * private void setupSession() {
-        session = new Session(preferences, new SessionListener() {
-            @Override
-            void onSessionStart(long timestamp) {
-                Log.d(Contract.TAG, "session started");
-
-                Map<String, Object> properties = session.defaultProperties();
-                properties.putAll(sessionProperties);
-
-                track("session_start", properties, timestamp);
-            }
-
-            @Override
-            void onSessionEnd(long timestamp, long duration) {
-                Log.d(Contract.TAG, "session finished, duration = " + duration);
-
-                Map<String, Object> properties = session.defaultProperties(duration);
-                properties.putAll(sessionProperties);
-
-                track("session_end", properties, timestamp);
-            }
-
-            @Override
-            void onSessionRestart(Map<String, String> newCustomer) {
-                customer = newCustomer;
-            }
-        });
-
-        session.run();
-    }
-     */
-
-    /**
-     * Sets up delayed alarm for automatic flushing of events. Each call to {@code track()} or
-     * {@code update()} resets the delayed alarm to accumulate several events and updates together
-     * to send them in a single batch. Delayed alarm fires off if there is more than 10
-     * seconds between two calls of {@code track()} or {@code update()} or the two
-     * mentioned methods are called more than 50 times in a row.
-     *
-     * Delayed alarm is disabled if {@code automaticFlushing()} returns false.
-     */
-    private void setupDelayedAlarm() {
-        PendingIntent alarmIntent = getAlarmIntent(context, Contract.DELAYED_ALARM);
-
-        if (commandCounter > 0) {
-            commandCounter--;
-
-            getAlarmManager(context).set(AlarmManager.RTC,
-                    System.currentTimeMillis() + Contract.FLUSH_DELAY,
-                    alarmIntent);
-        }
-        else {
-            commandCounter = Contract.FLUSH_COUNT;
-            context.sendBroadcast(getIntent(context, Contract.IMMEDIATE_ALARM));
-        }
-    }
-
-    /**
-     * Prepares alarm intent.
-     *
-     * @param context application's context
-     * @param requestCode {@code Contract.PERIODIC_ALARM}, {@code Contract.IMMEDIATE_ALARM} or {@code Contract.DELAYED_ALARM}
-     * @return intent for AlarmReceiver
-     */
-    private static Intent getIntent(Context context, int requestCode) {
-        Intent intent = new Intent(context, AlarmReceiver.class);
-        intent.putExtra(Contract.EXTRA_REQUEST_CODE, requestCode);
-        return intent;
-    }
-
-    /**
-     * Prepares alarm pending intent.
-     *
-     * @param context application's context
-     * @param requestCode {@code Contract.PERIODIC_ALARM}, {@code Contract.IMMEDIATE_ALARM} or {@code Contract.DELAYED_ALARM}
-     * @return pending intent for AlarmReceiver
-     */
-    private static PendingIntent getAlarmIntent(Context context, int requestCode) {
-        return PendingIntent.getBroadcast(context, requestCode, getIntent(context, requestCode), 0);
-    }
-
     /**
      * Gets Alarm Manager.
      *
@@ -1020,49 +902,6 @@ public class Infinario {
     }
 
     /**
-     * Checks connectivity to Infinario API.
-     *
-     * @param context application's context
-     * @return true if there is connectivity to Infinario API, false otherwise
-     */
-    private static boolean isConnected(Context context) {
-        ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
-        NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
-
-        if (activeNetwork != null && activeNetwork.isConnected()) {
-            try {
-                URL url = new URL(Preferences.get(context).getTarget() + Contract.PING_TARGET);
-                HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
-                urlConnection.setRequestProperty("User-Agent", "test");
-                urlConnection.setRequestProperty("Connection", "close");
-                urlConnection.setConnectTimeout(1000);
-                urlConnection.connect();
-
-                return (200 == urlConnection.getResponseCode());
-            } catch (IOException e) {
-                Log.i(Contract.TAG, "Error while checking the internet connection", e);
-                return false;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Enables / disables broadcast receiver for monitoring network state changes.
-     *
-     * @param context application's context
-     */
-    private static void setConnectivityMonitor(Context context, boolean enabled) {
-        ComponentName receiver = new ComponentName(context, ConnectivityReceiver.class);
-        PackageManager packageManager = context.getPackageManager();
-
-        packageManager.setComponentEnabledSetting(receiver,
-                (enabled ? PackageManager.COMPONENT_ENABLED_STATE_ENABLED : PackageManager.COMPONENT_ENABLED_STATE_DISABLED),
-                PackageManager.DONT_KILL_APP);
-    }
-
-    /**
      * @return return drawable id by string
      */
     private int getDrawableId(String nameDrawable){
@@ -1139,5 +978,22 @@ public class Infinario {
      */
     public interface SegmentListener{
         void onSegmentReceive(boolean wasSuccessful, InfinarioSegment segment, String error);
+    }
+
+    private void startFlushTimer(){
+        synchronized (lockFlushTimer){
+            if (sessionHandler != null){
+                stopFlushTimer();
+                sessionHandler.postDelayed(sessionFlushRunnable, Contract.FLUSH_DELAY);
+            }
+        }
+    }
+
+    private void stopFlushTimer(){
+        synchronized (lockFlushTimer){
+            if(sessionHandler != null){
+                sessionHandler.removeCallbacks(sessionFlushRunnable);
+            }
+        }
     }
 }
