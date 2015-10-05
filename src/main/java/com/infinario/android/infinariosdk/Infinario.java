@@ -66,7 +66,6 @@ public class Infinario {
     private final Context context;
     private int commandCounter = Contract.FLUSH_COUNT;
     private Preferences preferences;
-    private Session session = null;
     private IabHelper iabHelper = null;
     private Map<String, Object> sessionProperties;
     private JSONObject amazonProduct;
@@ -75,8 +74,9 @@ public class Infinario {
     private SegmentListener listener;
     private long sessionTimeOut;
     private Object lockSessionAccess;
+    private Object lockSessionImplAccess;
     private Handler sessionHandler;
-    private Runnable sessionRunnable;
+    private Runnable sessionEndRunnable;
     private int sessionCounter;
 
     private Infinario(Context context, String token, String target, Map<String, String> customer) {
@@ -118,9 +118,10 @@ public class Infinario {
         }
 
         lockSessionAccess = new Object();
+        lockSessionImplAccess = new Object();
 
         sessionHandler = new Handler();
-        sessionRunnable = new Runnable() {
+        sessionEndRunnable = new Runnable() {
             public void run() {
                 synchronized (lockSessionAccess) {
                     if (preferences.getSessionEnd() != -1) {
@@ -297,13 +298,13 @@ public class Infinario {
     }
 
     public void trackSessionStartImpl(){
-        synchronized (lockSessionAccess){
+        synchronized (lockSessionImplAccess){
             long now = (new Date()).getTime();
             long sessionEnd = preferences.getSessionEnd();
             long sessionStart = preferences.getSessionStart();
 
             if (sessionHandler != null){
-                sessionHandler.removeCallbacks(sessionRunnable);
+                sessionHandler.removeCallbacks(sessionEndRunnable);
             }
 
             if (sessionEnd != -1){
@@ -318,6 +319,9 @@ public class Infinario {
             } else  if (sessionStart == -1){
                 //Create session start
                 sessionStart(now);
+            } else if (now - sessionStart > sessionTimeOut) {
+                //Create session start
+                sessionStart(now);
             } else {
                 //Continue in current session
             }
@@ -325,13 +329,10 @@ public class Infinario {
     }
 
     public void trackSessionEndImpl(){
-        synchronized (lockSessionAccess){
-            if (preferences.getSessionEnd() != -1){
-                //Save session end with current timestamp and start count TIMEOUT
-                preferences.setSessionEnd((new Date()).getTime());
-                sessionHandler.postDelayed(sessionRunnable, sessionTimeOut);
-            }
-
+        synchronized (lockSessionImplAccess){
+            //Save session end with current timestamp and start count TIMEOUT
+            preferences.setSessionEnd((new Date()).getTime());
+            sessionHandler.postDelayed(sessionEndRunnable, sessionTimeOut);
         }
     }
 
