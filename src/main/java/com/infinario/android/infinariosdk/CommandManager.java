@@ -24,6 +24,7 @@ public class CommandManager {
     Preferences preferences;
     Object lockFlush;
     boolean flushInProgress;
+    boolean flushMayNeedRestart;
     AsyncTask<Void, Void, Void> flushTask;
 
     public CommandManager(Context context, String target) {
@@ -34,6 +35,7 @@ public class CommandManager {
 
         synchronized (lockFlush){
             flushInProgress = false;
+            flushMayNeedRestart = false;
         }
     }
 
@@ -141,30 +143,39 @@ public class CommandManager {
                 return true;
             }
             else {
+                flushMayNeedRestart = true;
                 return false;
             }
         }
     }
 
     private void flushCommands(int maxRetries) {
-        int delayFlush = 1000;
-        int retryCounter = 0;
+        while (true) {
+            int delayFlush = 1000;
+            int retryCounter = 0;
 
-        try{
-            while (!queue.isEmpty() && (retryCounter <= maxRetries)) {
-                if (!executeBatch()) {
-                    if (maxRetries > 1) {
-                        Thread.sleep(delayFlush);
-                        delayFlush = exponentialIncrease(delayFlush);
-                    }
-
-                    retryCounter += 1;
+            synchronized (lockFlush) {
+                if (!flushMayNeedRestart) {
+                     flushInProgress = false;
+                     break;
                 }
+                flushMayNeedRestart = false;
             }
-        } catch (Exception e) {
-            Log.e(Contract.TAG, e.getMessage().toString());
-        } finally {
-            flushInProgress = false;
+
+            try{
+                while (!queue.isEmpty() && (retryCounter <= maxRetries)) {
+                    if (!executeBatch()) {
+                        if (maxRetries > 1) {
+                            Thread.sleep(delayFlush);
+                            delayFlush = exponentialIncrease(delayFlush);
+                        }
+
+                        retryCounter += 1;
+                    }
+                }
+            } catch (Exception e) {
+                Log.e(Contract.TAG, e.getMessage().toString());
+            }
         }
     }
 
