@@ -130,6 +130,7 @@ public class CommandManager {
 
     public boolean flush(final int count) {
         synchronized (lockFlush) {
+            flushMayNeedRestart = true;
             if (!flushInProgress) {
                 flushInProgress = true;
                 flushTask = new AsyncTask<Void, Void, Void>() {
@@ -143,7 +144,6 @@ public class CommandManager {
                 return true;
             }
             else {
-                flushMayNeedRestart = true;
                 return false;
             }
         }
