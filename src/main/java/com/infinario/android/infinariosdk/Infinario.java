@@ -73,6 +73,7 @@ public class Infinario {
     private long sessionEnd = -1;
     private long sessionTimeOut;
     private Object lockPublic;
+    private Object lockFlushTimer;
     private static Object lockInstance = new Object();
     private Handler sessionHandler;
     private Runnable sessionEndRunnable;
@@ -114,11 +115,12 @@ public class Infinario {
         }
 
         lockPublic = new Object();
+        lockFlushTimer = new Object();
 
         sessionHandler = new Handler();
         sessionEndRunnable = new Runnable() {
             public void run() {
-                synchronized (lockSessionAccess) {
+                synchronized (lockPublic) {
                     if (preferences.getSessionEnd() != -1) {
                         sessionEnd(preferences.getSessionEnd(), (preferences.getSessionEnd() - preferences.getSessionStart()) / 1000L);
                     }
@@ -398,7 +400,7 @@ public class Infinario {
         }
     }
 
-    private boolean _track(type, properties, timestamp) {
+    private boolean _track(String type, Map<String, Object> properties, Long timestamp) {
         if (commandManager.schedule(new Event(customer, token, type, properties, timestamp))) {
             if (preferences.getAutomaticFlushing()) {
                 startFlushTimer();
@@ -408,6 +410,10 @@ public class Infinario {
         }
 
         return false;
+    }
+
+    private boolean _track(String type, Map<String, Object> properties) {
+        return _track(type, properties, null);
     }
 
     /**
@@ -605,7 +611,7 @@ public class Infinario {
      * Return name of segment
      */
     public void getCurrentSegment(final String segmentationId, final String projectSecretToken, final SegmentListener listener){
-        synchronized (publicLock) {
+        synchronized (lockPublic) {
             if (Preferences.get(context).getTarget().startsWith("https")){
                 new AsyncTask<Void, Void, JSONObject>(){
 
@@ -614,8 +620,9 @@ public class Infinario {
                         HttpURLConnection connection = null;
 
                         try {
-                            synchronized (publicLock) {
-                                URL url = new URL(Preferences.get(context).getTarget() + Contract.SEGMENT_URL);
+                            URL url;
+                            synchronized (lockPublic) {
+                                url = new URL(Preferences.get(context).getTarget() + Contract.SEGMENT_URL);
                             }
                             connection = (HttpURLConnection) url.openConnection();
                             connection.setDoOutput(true);
@@ -631,7 +638,7 @@ public class Infinario {
                             JSONObject main = new JSONObject();
                             JSONObject ids = new JSONObject();
 
-                            synchronized (publicLock) {
+                            synchronized (lockPublic) {
                                 ids.put(Contract.COOKIE, customer.get(Contract.COOKIE));
                                 ids.put(Contract.REGISTERED, customer.get(Contract.REGISTERED));
                             }
@@ -702,7 +709,7 @@ public class Infinario {
      */
     @SuppressWarnings("UnusedDeclaration")
     public void enableAutomaticFlushing() {
-        synchronized (publicLock) {
+        synchronized (lockPublic) {
             preferences.setAutomaticFlushing(true);
             startFlushTimer();
         }
@@ -713,7 +720,7 @@ public class Infinario {
      */
     @SuppressWarnings("unused")
     public void disableAutomaticFlushing() {
-        synchronized (publicLock) {
+        synchronized (lockPublic) {
             preferences.setAutomaticFlushing(false);
             stopFlushTimer();
         }
@@ -736,7 +743,7 @@ public class Infinario {
      */
     @SuppressWarnings("unused")
     public void enableGooglePushNotifications(String senderId, int iconDrawable) {
-        synchronized (publicLock) {
+        synchronized (lockPublic) {
             preferences.setGooglePushNotifications(true);
 
             // Check device for Play Services APK. If check succeeds, proceed with GCM registration.
@@ -803,7 +810,7 @@ public class Infinario {
      */
     @SuppressWarnings("unused")
     public void disableGooglePushNotifications() {
-        synchronized (publicLock) {
+        synchronized (lockPublic) {
             preferences.setGooglePushNotifications(false);
         }
     }
@@ -814,36 +821,30 @@ public class Infinario {
      * @param context application's context
      * @param intent received intent from a broadcast receiver.
      */
-    public void handleGooglePushNotification(Context context, Intent intent) {
-        int iconDrawable;
-        boolean send = false;
-        synchronized (publicLock) {
-            Preferences preferences = Preferences.get(context);
+    public static void handleGooglePushNotification(Context context, Intent intent) {
+        Preferences preferences = Preferences.get(context);
 
-            if (preferences.getGooglePushNotifications() && checkPlayServices(context)) {
-                GoogleCloudMessaging gcm = GoogleCloudMessaging.getInstance(context);
-                Bundle extras = intent.getExtras();
-                String messageType = gcm.getMessageType(intent);
-                String senderId = preferences.getSenderId();
+        if (preferences.getGooglePushNotifications() && checkPlayServices(context)) {
+            GoogleCloudMessaging gcm = GoogleCloudMessaging.getInstance(context);
+            Bundle extras = intent.getExtras();
+            String messageType = gcm.getMessageType(intent);
+            String senderId = preferences.getSenderId();
 
-                if (!extras.isEmpty() &&
-                        senderId != null &&
-                        !senderId.equals("") &&
-                        GoogleCloudMessaging.MESSAGE_TYPE_MESSAGE.equals(messageType) &&
-                        extras.getString("from").equals(senderId)) {
+            if (!extras.isEmpty() &&
+                senderId != null &&
+                !senderId.equals("") &&
+                GoogleCloudMessaging.MESSAGE_TYPE_MESSAGE.equals(messageType) &&
+                extras.getString("from").equals(senderId)) {
 
-                    Log.d(Contract.TAG, "Received data: " + intent.getExtras().toString());
-                    iconDrawable = preferences.getIcon();
-                    send = true;
-                }
+                Log.d(Contract.TAG, "Received data: " + intent.getExtras().toString());
+                sendNotification(context, intent.getExtras(), preferences.getIcon());
             }
         }
-        if (send) sendNotification(context, intent.getExtras(), iconDrawable);
     }
 
     @SuppressWarnings("UnusedDeclaration")
     public void clearStoredData() {
-        synchronized (publicLock) {
+        synchronized (lockPublic) {
             preferences.clearStoredData();
         }
     }
@@ -976,10 +977,10 @@ public class Infinario {
         new Thread(new Runnable() {
             public void run() {
                 try {
-                    synchronized (publicLock) {
-                        AdvertisingIdClient.Info adInfo = AdvertisingIdClient.getAdvertisingIdInfo(context);
-                        preferences.setGoogleAdvertisingId(adInfo.getId());
+                    AdvertisingIdClient.Info adInfo = AdvertisingIdClient.getAdvertisingIdInfo(context);
+                    preferences.setGoogleAdvertisingId(adInfo.getId());
 
+                    synchronized (lockPublic) {
                         HashMap<String,Object> advId = new HashMap<String, Object>();
                         advId.put(Contract.PROPERTY_GOOGLE_ADV_ID,adInfo.getId());
                         _update(advId);

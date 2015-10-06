@@ -21,14 +21,21 @@ public class Preferences {
 
     private Context context;
     private static Preferences instance = null;
+    private static Object lockInstance = new Object();
+    private Object lockAccess;
 
     private Preferences(Context context) {
         this.context = context;
+        lockAccess = new Object();
     }
 
     public static Preferences get(Context context) {
         if (instance == null) {
-            instance = new Preferences(context);
+            synchronized (lockInstance) {
+                if (instance == null) {
+                    instance = new Preferences(context);
+                }
+            }
         }
 
         return instance;
@@ -41,7 +48,9 @@ public class Preferences {
     private SharedPreferences getPreferences(Context context) {
         // This sample app persists the registration ID in shared preferences, but
         // how you store the regID in your app is up to you.
-        return context.getSharedPreferences(Contract.PROPERTY, Context.MODE_PRIVATE);
+        synchronized (lockAccess) {
+            return context.getSharedPreferences(Contract.PROPERTY, Context.MODE_PRIVATE);
+        }
     }
 
     /**
