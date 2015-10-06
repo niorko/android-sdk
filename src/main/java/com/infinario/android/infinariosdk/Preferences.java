@@ -352,7 +352,7 @@ public class Preferences {
             data.put("device", Device.deviceProperties(instance));
             data.put("campaign_id", getReferrer());
 
-            HttpHelper http = new HttpHelper(getTarget());
+            HttpHelper http = new HttpHelper(getTarget(), UserAgent.create(instance));
 
             JSONObject response = http.post(Contract.NEGOTIATION_ENDPOINT, new JSONObject(data));
 

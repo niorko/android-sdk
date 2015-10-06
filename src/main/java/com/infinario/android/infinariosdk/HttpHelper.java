@@ -20,19 +20,22 @@ import java.io.UnsupportedEncodingException;
 public class HttpHelper {
 
     private String target;
+    private String userAgent;
 
-    public HttpHelper(String target) {
+    public HttpHelper(String target, String userAgent) {
         if (target == null) {
             this.target = Contract.DEFAULT_TARGET;
         }
         else {
             this.target = target;
         }
+
+        this.userAgent = userAgent;
     }
 
     @SuppressWarnings("unused")
     public HttpHelper() {
-        this(null);
+        this(null, null);
     }
 
     /**
@@ -59,6 +62,10 @@ public class HttpHelper {
         httppost.setEntity(entity);
         httppost.setHeader("Accept", "application/json");
         httppost.setHeader("Content-type", "application/json");
+
+        if (userAgent != null) {
+            httppost.setHeader("User-Agent", userAgent);
+        }
 
         try {
             response = httpclient.execute(httppost);

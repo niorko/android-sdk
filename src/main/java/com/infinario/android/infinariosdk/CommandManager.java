@@ -27,10 +27,10 @@ public class CommandManager {
     boolean flushMayNeedRestart;
     AsyncTask<Void, Void, Void> flushTask;
 
-    public CommandManager(Context context, String target) {
+    public CommandManager(Context context, String target, String userAgent) {
         queue = new DbQueue(context);
-        http = new HttpHelper(target);
         preferences = Preferences.get(context);
+        http = new HttpHelper(target, userAgent);
         lockFlush = new Object();
 
         synchronized (lockFlush){

@@ -61,6 +61,7 @@ public class Infinario {
     private GoogleCloudMessaging gcm = null;
     private String token;
     private String registrationId;
+    private String userAgent;
     private Map<String, String> customer;
     private CommandManager commandManager;
     private final Context context;
@@ -95,7 +96,17 @@ public class Infinario {
             preferences.setTarget(target.replaceFirst("/*$", ""));
         }
 
-        commandManager = new CommandManager(context, target);
+        if (preferences.getGoogleAdvertisingId().isEmpty()){
+            initializeGoogleAdvertisingId();
+        }
+
+        if (preferences.getDeviceType().isEmpty()){
+            initializeDeviceType();
+        }
+
+        userAgent = UserAgent.create(preferences);
+
+        commandManager = new CommandManager(context, target, userAgent);
 
         iabHelper = new IabHelper(context);
         iabHelper.startSetup(null);
@@ -105,14 +116,6 @@ public class Infinario {
         }
 
         customer.put(Contract.COOKIE, preferences.getCookieId());
-
-        if (preferences.getGoogleAdvertisingId().isEmpty()){
-            initializeGoogleAdvertisingId();
-        }
-
-        if (preferences.getDeviceType().isEmpty()){
-            initializeDeviceType();
-        }
 
         lockPublic = new Object();
         lockFlushTimer = new Object();
@@ -632,6 +635,10 @@ public class Infinario {
                             connection.setRequestProperty("Content-Type", "application/json");
                             connection.setRequestProperty("Accept", "application/json");
                             connection.setRequestProperty("X-Infinario-Secret", projectSecretToken);
+
+                            synchronized (lockPublic) {
+                                connection.setRequestProperty("User-Agent", userAgent);
+                            }
 
                             connection.setRequestMethod("POST");
 
