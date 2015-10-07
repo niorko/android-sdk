@@ -227,11 +227,16 @@ public class Infinario {
     public void identify(Map<String, String> customer, Map<String, Object> properties) {
         synchronized (lockPublic) {
             if (customer.containsKey(Contract.REGISTERED)) {
+
                 this.customer.put(Contract.REGISTERED, customer.get(Contract.REGISTERED));
-                Map<String, Object> identificationProperties = Device.deviceProperties(preferences);
-                identificationProperties.put(Contract.REGISTERED, customer.get(Contract.REGISTERED));
-                _track("identification", identificationProperties);
-                _update(properties);
+
+                if (!customer.get(Contract.REGISTERED).equals(preferences.getRegistredId())){
+                    preferences.setRegistredId(customer.get(Contract.REGISTERED));
+                    Map<String, Object> identificationProperties = Device.deviceProperties(preferences);
+                    identificationProperties.put(Contract.REGISTERED, customer.get(Contract.REGISTERED));
+                    _track("identification", identificationProperties);
+                    _update(properties);
+                }
             }
         }
     }

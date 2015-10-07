@@ -279,6 +279,22 @@ public class Preferences {
     }
 
     /**
+     * Gets registred ID from preferences.
+     *
+     * @return cookie ID
+     */
+    public String getRegistredId() {
+        return getPreferences(context).getString(Contract.REGISTERED, "");
+    }
+
+    /**
+     * Sets registred ID in preferences.
+     */
+    public void setRegistredId(String value) {
+        getPreferences(context).edit().putString(Contract.REGISTERED, value).commit();
+    }
+
+    /**
      * Gets google advertising ID from preferences.
      *
      * @return google advertising ID
