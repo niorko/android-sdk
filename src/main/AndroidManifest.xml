@@ -21,23 +21,6 @@
             </intent-filter>
         </receiver>
 
-        <receiver android:name="com.infinario.android.infinariosdk.AlarmReceiver"
-            android:exported="true">
-        </receiver>
-
-        <receiver android:name="com.infinario.android.infinariosdk.BootReceiver" >
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED"></action>
-            </intent-filter>
-        </receiver>
-
-        <receiver android:name="com.infinario.android.infinariosdk.ConnectivityReceiver"
-            android:enabled="false">
-            <intent-filter>
-                <action android:name="android.net.conn.CONNECTIVITY_CHANGE" />
-            </intent-filter>
-        </receiver>
-
         <receiver android:name="com.infinario.android.infinariosdk.ReferrerReceiver"
             android:exported="true" >
             <intent-filter>

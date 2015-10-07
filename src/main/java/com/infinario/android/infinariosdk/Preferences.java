@@ -21,14 +21,21 @@ public class Preferences {
 
     private Context context;
     private static Preferences instance = null;
+    private static Object lockInstance = new Object();
+    private Object lockAccess;
 
     private Preferences(Context context) {
         this.context = context;
+        lockAccess = new Object();
     }
 
     public static Preferences get(Context context) {
         if (instance == null) {
-            instance = new Preferences(context);
+            synchronized (lockInstance) {
+                if (instance == null) {
+                    instance = new Preferences(context);
+                }
+            }
         }
 
         return instance;
@@ -41,7 +48,9 @@ public class Preferences {
     private SharedPreferences getPreferences(Context context) {
         // This sample app persists the registration ID in shared preferences, but
         // how you store the regID in your app is up to you.
-        return context.getSharedPreferences(Contract.PROPERTY, Context.MODE_PRIVATE);
+        synchronized (lockAccess) {
+            return context.getSharedPreferences(Contract.PROPERTY, Context.MODE_PRIVATE);
+        }
     }
 
     /**
@@ -270,6 +279,22 @@ public class Preferences {
     }
 
     /**
+     * Gets registred ID from preferences.
+     *
+     * @return cookie ID
+     */
+    public String getRegistredId() {
+        return getPreferences(context).getString(Contract.REGISTERED, "");
+    }
+
+    /**
+     * Sets registred ID in preferences.
+     */
+    public void setRegistredId(String value) {
+        getPreferences(context).edit().putString(Contract.REGISTERED, value).commit();
+    }
+
+    /**
      * Gets google advertising ID from preferences.
      *
      * @return google advertising ID
@@ -286,22 +311,6 @@ public class Preferences {
     }
 
     /**
-     * Gets campaign cookie ID from preferences.
-     *
-     * @return cookie ID
-     */
-    public String getCampaignCookieId() {
-        return getPreferences(context).getString(Contract.CAMPAIGN_COOKIE, "");
-    }
-
-    /**
-     * Sets campaign cookie ID in preferences.
-     */
-    public void setCampaignCookieId(String value) {
-        getPreferences(context).edit().putString(Contract.CAMPAIGN_COOKIE, value).commit();
-    }
-
-    /**
      * Gets device type from preferences.
      *
      * @return mobile / tablet
@@ -315,58 +324,6 @@ public class Preferences {
      */
     public void setDeviceType(String value){
         getPreferences(context).edit().putString(Contract.PROPERTY_DEVICE_TYPE, value).commit();
-    }
-
-    /**
-     * Ensures cookie ID is available. Negotiates one if necessary.
-     *
-     * @return availability of cookie ID
-     */
-    @SuppressLint("CommitPrefEdits")
-    public boolean ensureCookieId() {
-        String campaignCookieId = getCampaignCookieId();
-
-        if (campaignCookieId.isEmpty()) {
-            String token = getToken();
-
-            if (token == null) return false;
-
-            Map<String, String> ids = new HashMap<>();
-            Map<String, Object> data;
-
-            campaignCookieId = UUID.randomUUID().toString();
-            ids.put(Contract.COOKIE, campaignCookieId);
-
-            Customer customer = new Customer(ids, token, null);
-
-            data = customer.getData();
-            data.put("device", Device.deviceProperties(instance));
-            data.put("campaign_id", getReferrer());
-
-            HttpHelper http = new HttpHelper(getTarget());
-
-            JSONObject response = http.post(Contract.NEGOTIATION_ENDPOINT, new JSONObject(data));
-
-            if (response != null) {
-                try {
-                    campaignCookieId = response.getJSONObject("data").getJSONObject("ids").getString("cookie");
-                    Log.d(Contract.TAG, "Negotiated cookie id");
-                    setCampaignCookieId(campaignCookieId);
-
-                    if (getCookieId().isEmpty()) {
-                        setCookieId(campaignCookieId);
-                    }
-
-                    return true;
-                }
-                catch (JSONException ignored) {
-                }
-            }
-
-            return false;
-        }
-
-        return true;
     }
 
     /**

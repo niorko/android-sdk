@@ -1,6 +1,7 @@
 package com.infinario.android.infinariosdk;
 
 import android.content.Context;
+import android.os.AsyncTask;
 import android.util.Log;
 
 import org.json.JSONArray;
@@ -22,12 +23,20 @@ public class CommandManager {
     HttpHelper http;
     Preferences preferences;
     Object lockFlush;
+    boolean flushInProgress;
+    boolean flushMayNeedRestart;
+    AsyncTask<Void, Void, Void> flushTask;
 
-    public CommandManager(Context context, String target) {
+    public CommandManager(Context context, String target, String userAgent) {
         queue = new DbQueue(context);
-        http = new HttpHelper(target);
         preferences = Preferences.get(context);
+        http = new HttpHelper(target, userAgent);
         lockFlush = new Object();
+
+        synchronized (lockFlush){
+            flushInProgress = false;
+            flushMayNeedRestart = false;
+        }
     }
 
     public boolean schedule(Command command) {
@@ -35,12 +44,7 @@ public class CommandManager {
     }
 
     public boolean executeBatch() {
-        if (!preferences.ensureCookieId()) {
-            Log.d(Contract.TAG, "Failed to negotiate cookie ID");
-            return false;
-        }
-
-        Set<Integer> failedRequests = new HashSet<>();
+        Set<Integer> deleteRequests = new HashSet<>();
         Set<Integer> successfulRequests = new HashSet<>();
         JSONArray results;
         JSONArray commands = new JSONArray();
@@ -52,14 +56,13 @@ public class CommandManager {
         String status;
 
         if (requests.isEmpty()) {
-            return false;
+            return true;
         }
 
         Log.i(Contract.TAG, "sending ids " + requests.get(0).getId() + " - " + requests.get(requests.size() - 1).getId());
 
         for (Request r : requests) {
             commands.put(setCookieId(setAge(r.getCommand())));
-            failedRequests.add(r.getId());
         }
 
         try {
@@ -69,6 +72,12 @@ public class CommandManager {
         }
 
         data = http.post(Contract.BULK_URL, payload);
+
+        StringBuilder logResult = new StringBuilder();
+        logResult.append("Batch executed, ")
+                .append(requests.size())
+                .append(" prepared, ");
+
 
         if (data != null) {
             try {
@@ -85,40 +94,94 @@ public class CommandManager {
                         status = result.getString("status").toLowerCase();
 
                         if (status.equals("ok")) {
-                            failedRequests.remove(request.getId());
+                            deleteRequests.add(request.getId());
                             successfulRequests.add(request.getId());
-                        } else if (status.equals("retry")) {
-                            failedRequests.remove(request.getId());
+                        } else if (status.equals("error")) {
+                            deleteRequests.add(request.getId());
                         }
                     } catch (JSONException e) {
                         e.printStackTrace();
                     }
                 }
+                logResult.append(successfulRequests.size())
+                        .append(" succeeded, ")
+                        .append(deleteRequests.size() - successfulRequests.size());
+            } else {
+                logResult.append("0 succeeded, ")
+                        .append(requests.size());
             }
+        } else {
+            logResult.append("0 succeeded, ")
+                    .append(requests.size());
         }
 
-        queue.clear(successfulRequests, failedRequests);
+        logResult.append(" failed, rest was told to retry");
+        Log.i(Contract.TAG, logResult.toString());
 
-        Log.i(Contract.TAG, "Batch executed, " + requests.size() + " prepared, " + successfulRequests.size() + " succeeded, "
-                + failedRequests.size() + " failed, rest was told to retry");
+        queue.clear(deleteRequests);
 
-        return successfulRequests.size() > 0 || failedRequests.size() > 0;
+        return requests.size() == deleteRequests.size();
     }
 
-    public void flush() {
-        synchronized (lockFlush){
-            int retries = MAX_RETRIES;
-
-            while (retries > 0) {
-                if (!executeBatch()) {
-                    if (queue.isEmpty()) {
-                        break;
-                    } else {
-                        --retries;
+    public boolean flush(final int count) {
+        synchronized (lockFlush) {
+            flushMayNeedRestart = true;
+            if (!flushInProgress) {
+                flushInProgress = true;
+                flushTask = new AsyncTask<Void, Void, Void>() {
+                    @Override
+                    protected Void doInBackground(Void... params) {
+                        flushCommands(count);
+                        return null;
                     }
-                }
+                }.execute();
+
+                return true;
+            }
+            else {
+                return false;
             }
         }
+    }
+
+    private void flushCommands(int maxRetries) {
+        while (true) {
+            int delayFlush = 1000;
+            int retryCounter = 0;
+
+            synchronized (lockFlush) {
+                if (!flushMayNeedRestart) {
+                     flushInProgress = false;
+                     break;
+                }
+                flushMayNeedRestart = false;
+            }
+
+            try{
+                while (!queue.isEmpty() && (retryCounter <= maxRetries)) {
+                    if (!executeBatch()) {
+                        if (maxRetries > 1) {
+                            Thread.sleep(delayFlush);
+                            delayFlush = exponentialIncrease(delayFlush);
+                        }
+
+                        retryCounter += 1;
+                    }
+                }
+            } catch (Exception e) {
+                Log.e(Contract.TAG, e.getMessage().toString());
+            }
+        }
+    }
+
+
+    private int exponentialIncrease(int timeInMiliseconds)
+    {
+        int calculateDelay = timeInMiliseconds * 2;
+
+        return Contract.FLUSH_MAX_INTERVAL < calculateDelay
+                ? Contract.FLUSH_MAX_INTERVAL
+                : calculateDelay;
     }
 
     private JSONObject setCookieId(JSONObject command) {
@@ -126,11 +189,11 @@ public class CommandManager {
             JSONObject data = command.getJSONObject("data");
 
             if (data.has("ids") && data.getJSONObject("ids").getString("cookie").isEmpty()) {
-                data.getJSONObject("ids").put("cookie", preferences.getCampaignCookieId());
+                data.getJSONObject("ids").put("cookie", preferences.getCookieId());
             }
 
             if (data.has("customer_ids") && data.getJSONObject("customer_ids").getString("cookie").isEmpty()) {
-                data.getJSONObject("customer_ids").put("cookie", preferences.getCampaignCookieId());
+                data.getJSONObject("customer_ids").put("cookie", preferences.getCookieId());
             }
         }
         catch (JSONException ignored) {

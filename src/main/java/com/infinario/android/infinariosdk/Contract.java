@@ -16,7 +16,7 @@ public class Contract {
      * SDK
      */
     public static final String SDK = "AndroidSDK";
-    public static final String VERSION = "1.1.2";
+    public static final String VERSION = "1.1.3";
     public static final String OS = "Android";
 
     /**
@@ -70,13 +70,11 @@ public class Contract {
     /**
      * Automatic flushing
      */
-    public static final long UPDATE_INTERVAL = 6 * AlarmManager.INTERVAL_HOUR;
     public static final long FLUSH_DELAY = 10 * 1000;
     public static final int FLUSH_COUNT = 50;
     public static final boolean DEFAULT_AUTO_FLUSH = true;
-    public static final int PERIODIC_ALARM = 1;
-    public static final int DELAYED_ALARM = 2;
-    public static final int IMMEDIATE_ALARM = 3;
+    public static int FLUSH_MIN_INTERVAL = 1000;
+    public static int FLUSH_MAX_INTERVAL = 3600000;
 
     /**
      * Session

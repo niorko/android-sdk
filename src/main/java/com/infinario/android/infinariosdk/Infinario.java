@@ -15,6 +15,7 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.RemoteException;
+import android.provider.Settings;
 import android.support.v4.app.NotificationCompat;
 import android.util.DisplayMetrics;
 import android.util.Log;
@@ -61,22 +62,24 @@ public class Infinario {
     private GoogleCloudMessaging gcm = null;
     private String token;
     private String registrationId;
+    private String userAgent;
     private Map<String, String> customer;
     private CommandManager commandManager;
     private final Context context;
     private int commandCounter = Contract.FLUSH_COUNT;
     private Preferences preferences;
-    private Session session = null;
     private IabHelper iabHelper = null;
     private Map<String, Object> sessionProperties;
     private JSONObject amazonProduct;
     private long sessionStart = -1;
     private long sessionEnd = -1;
-    private SegmentListener listener;
     private long sessionTimeOut;
-    private Object lockSessionAccess;
+    private Object lockPublic;
+    private Object lockFlushTimer;
+    private static Object lockInstance = new Object();
     private Handler sessionHandler;
-    private Runnable sessionRunnable;
+    private Runnable sessionEndRunnable;
+    private Runnable sessionFlushRunnable;
     private int sessionCounter;
 
     private Infinario(Context context, String token, String target, Map<String, String> customer) {
@@ -94,11 +97,21 @@ public class Infinario {
             preferences.setTarget(target.replaceFirst("/*$", ""));
         }
 
-        commandManager = new CommandManager(context, target);
-
-        if (preferences.getAutomaticFlushing()) {
-            setupPeriodicAlarm(context);
+        if (preferences.getGoogleAdvertisingId().isEmpty()){
+            initializeGoogleAdvertisingId();
         }
+
+        if (preferences.getDeviceType().isEmpty()){
+            initializeDeviceType();
+        }
+
+        if (preferences.getCookieId().isEmpty()){
+            preferences.setCookieId(Settings.Secure.getString(context.getContentResolver(), Settings.Secure.ANDROID_ID));
+        }
+
+        userAgent = UserAgent.create(preferences);
+
+        commandManager = new CommandManager(context, target, userAgent);
 
         iabHelper = new IabHelper(context);
         iabHelper.startSetup(null);
@@ -109,28 +122,30 @@ public class Infinario {
 
         customer.put(Contract.COOKIE, preferences.getCookieId());
 
-        if (preferences.getGoogleAdvertisingId().isEmpty()){
-            initializeGoogleAdvertisingId();
-        }
-
-        if (preferences.getDeviceType().isEmpty()){
-            initializeDeviceType();
-        }
-
-        lockSessionAccess = new Object();
+        lockPublic = new Object();
+        lockFlushTimer = new Object();
 
         sessionHandler = new Handler();
-        sessionRunnable = new Runnable() {
+        sessionEndRunnable = new Runnable() {
             public void run() {
-                synchronized (lockSessionAccess) {
+                synchronized (lockPublic) {
                     if (preferences.getSessionEnd() != -1) {
                         sessionEnd(preferences.getSessionEnd(), (preferences.getSessionEnd() - preferences.getSessionStart()) / 1000L);
                     }
                 }
             }
         };
+        sessionFlushRunnable = new Runnable() {
+            public void run() {
+                flush();
+            }
+        };
 
         this.customer = customer;
+
+        if (preferences.getAutomaticFlushing()) {
+            startFlushTimer();
+        }
     }
 
     /**
@@ -145,7 +160,11 @@ public class Infinario {
     @SuppressWarnings("unused")
     public static Infinario getInstance(Context context, String token, String target, Map<String, String> customer) {
         if (instance == null) {
-            instance = new Infinario(context, token, target, customer);
+            synchronized (lockInstance){
+                if (instance == null){
+                    instance = new Infinario(context, token, target, customer);
+                }
+            }
         }
 
         return instance;
@@ -211,12 +230,19 @@ public class Infinario {
      */
     @SuppressWarnings("unused")
     public void identify(Map<String, String> customer, Map<String, Object> properties) {
-        if (customer.containsKey(Contract.REGISTERED)) {
-            this.customer.put(Contract.REGISTERED, customer.get(Contract.REGISTERED));
-            Map<String, Object> identificationProperties = Device.deviceProperties(preferences);
-            identificationProperties.put(Contract.REGISTERED, customer.get(Contract.REGISTERED));
-            track("identification", identificationProperties);
-            update(properties);
+        synchronized (lockPublic) {
+            if (customer.containsKey(Contract.REGISTERED)) {
+
+                this.customer.put(Contract.REGISTERED, customer.get(Contract.REGISTERED));
+
+                if (!customer.get(Contract.REGISTERED).equals(preferences.getRegistredId())){
+                    preferences.setRegistredId(customer.get(Contract.REGISTERED));
+                    Map<String, Object> identificationProperties = Device.deviceProperties(preferences);
+                    identificationProperties.put(Contract.REGISTERED, customer.get(Contract.REGISTERED));
+                    _track("identification", identificationProperties);
+                    _update(properties);
+                }
+            }
         }
     }
 
@@ -259,9 +285,15 @@ public class Infinario {
      * @return success of the operation
      */
     public boolean update(Map<String, Object> properties) {
+        synchronized (lockPublic) {
+            return _update(properties);
+        }
+    }
+
+    private boolean _update(Map<String, Object> properties) {
         if (commandManager.schedule(new Customer(customer, token, properties))) {
             if (preferences.getAutomaticFlushing()) {
-                setupDelayedAlarm();
+                startFlushTimer();
             }
 
             return true;
@@ -279,7 +311,7 @@ public class Infinario {
             properties.put("app_version", appVersionName);
         }
 
-        track("session_start", properties, timeStamp);
+        _track("session_start", properties, timeStamp);
     }
 
     private void sessionEnd(long timeStamp, long duration){
@@ -290,20 +322,20 @@ public class Infinario {
         }
         properties.put("duration", duration);
 
-        track("session_end", properties, timeStamp);
+        _track("session_end", properties, timeStamp);
 
         preferences.setSessionStart(-1);
         preferences.setSessionEnd(-1);
     }
 
     public void trackSessionStartImpl(){
-        synchronized (lockSessionAccess){
+        synchronized (lockPublic){
             long now = (new Date()).getTime();
             long sessionEnd = preferences.getSessionEnd();
             long sessionStart = preferences.getSessionStart();
 
             if (sessionHandler != null){
-                sessionHandler.removeCallbacks(sessionRunnable);
+                sessionHandler.removeCallbacks(sessionEndRunnable);
             }
 
             if (sessionEnd != -1){
@@ -318,6 +350,9 @@ public class Infinario {
             } else  if (sessionStart == -1){
                 //Create session start
                 sessionStart(now);
+            } else if (now - sessionStart > sessionTimeOut) {
+                //Create session start
+                sessionStart(now);
             } else {
                 //Continue in current session
             }
@@ -325,39 +360,42 @@ public class Infinario {
     }
 
     public void trackSessionEndImpl(){
-        synchronized (lockSessionAccess){
-            if (preferences.getSessionEnd() != -1){
-                //Save session end with current timestamp and start count TIMEOUT
-                preferences.setSessionEnd((new Date()).getTime());
-                sessionHandler.postDelayed(sessionRunnable, sessionTimeOut);
-            }
-
+        synchronized (lockPublic){
+            //Save session end with current timestamp and start count TIMEOUT
+            preferences.setSessionEnd((new Date()).getTime());
+            sessionHandler.postDelayed(sessionEndRunnable, sessionTimeOut);
         }
     }
 
     public void setSessionTimeOut(long value) {
-        sessionTimeOut = value;
+        synchronized (lockPublic){
+            sessionTimeOut = value;
+        }
     }
 
-    public void trackSessionStart(){
-        synchronized (lockSessionAccess){
+    public void trackSessionStart(){        
+        int _sessionCounter = 0;
+        synchronized (lockPublic) {
             sessionCounter += 1;
+            _sessionCounter = sessionCounter;
+        }
 
-            if (sessionCounter  == 1){
-                trackSessionStartImpl();
-            }
+        if (_sessionCounter == 1){
+            trackSessionStartImpl();
         }
     }
 
     public void trackSessionEnd(){
-        synchronized (lockSessionAccess){
+        int _sessionCounter = 0;
+        synchronized (lockPublic){
             if (sessionCounter > 0){
                 sessionCounter -= 1;
             }
+            _sessionCounter = sessionCounter;
+        }
 
-            if (sessionCounter == 0){
-                trackSessionEndImpl();
-            }
+        if (_sessionCounter == 0) {
+            trackSessionEndImpl();
         }
     }
 
@@ -370,15 +408,25 @@ public class Infinario {
      * @return success of the operation
      */
     public boolean track(String type, Map<String, Object> properties, Long timestamp) {
+        synchronized (lockPublic) {
+            return _track(type, properties, timestamp);
+        }
+    }
+
+    private boolean _track(String type, Map<String, Object> properties, Long timestamp) {
         if (commandManager.schedule(new Event(customer, token, type, properties, timestamp))) {
             if (preferences.getAutomaticFlushing()) {
-                setupDelayedAlarm();
+                startFlushTimer();
             }
 
             return true;
         }
 
         return false;
+    }
+
+    private boolean _track(String type, Map<String, Object> properties) {
+        return _track(type, properties, null);
     }
 
     /**
@@ -415,8 +463,10 @@ public class Infinario {
 
     @SuppressWarnings("unused")
     public void setSessionProperties(Map<String, Object> properties) {
-        if (properties != null) {
-            sessionProperties = properties;
+        synchronized (lockPublic) {
+            if (properties != null) {
+                sessionProperties = properties;
+            }
         }
     }
 
@@ -429,101 +479,111 @@ public class Infinario {
     }
 
     public void trackGooglePurchases(int resultCode, Intent data) {
-        if (!iabHelper.setupDone() || data == null) {
-            return;
-        }
-
-        int responseCode = IabHelper.getResponseCodeFromIntent(data);
-        String purchaseData = data.getStringExtra("INAPP_PURCHASE_DATA");
-
-        if (resultCode == Activity.RESULT_OK && responseCode == 0) {
-            if (purchaseData == null) {
-                Log.d(Contract.TAG, "purchaseData is null");
+        synchronized (lockPublic) {
+            if (!iabHelper.setupDone() || data == null) {
                 return;
             }
 
-            try {
-                JSONObject o = new JSONObject(purchaseData);
-                final String productId = o.optString("productId");
-                final Long purchaseTime = o.optLong("purchaseTime");
-                final String purchaseToken = o.optString("purchaseToken");
+            int responseCode = IabHelper.getResponseCodeFromIntent(data);
+            String purchaseData = data.getStringExtra("INAPP_PURCHASE_DATA");
 
-                new AsyncTask<Void, Void, Void>() {
-                    @Override
-                    protected Void doInBackground(Void... params) {
-                        Log.d(Contract.TAG, "Purchased item " + productId + " at " + purchaseTime);
+            if (resultCode == Activity.RESULT_OK && responseCode == 0) {
+                if (purchaseData == null) {
+                    Log.d(Contract.TAG, "purchaseData is null");
+                    return;
+                }
 
-                        SkuDetails details;
+                try {
+                    JSONObject o = new JSONObject(purchaseData);
+                    final String productId = o.optString("productId");
+                    final Long purchaseTime = o.optLong("purchaseTime");
+                    final String purchaseToken = o.optString("purchaseToken");
 
-                        try {
-                            details = iabHelper.querySkuDetails("inapp", productId);
+                    new AsyncTask<Void, Void, Void>() {
+                        @Override
+                        protected Void doInBackground(Void... params) {
+                            synchronized (lockPublic) {
+                                Log.d(Contract.TAG, "Purchased item " + productId + " at " + purchaseTime);
 
-                            if (details == null && iabHelper.subscriptionsSupported()) {
-                                details = iabHelper.querySkuDetails("subs", productId);
+                                SkuDetails details;
+
+                                try {
+                                    details = iabHelper.querySkuDetails("inapp", productId);
+
+                                    if (details == null && iabHelper.subscriptionsSupported()) {
+                                        details = iabHelper.querySkuDetails("subs", productId);
+                                    }
+                                }
+                                catch (RemoteException | JSONException e) {
+                                    return null;
+                                }
+
+                                if (details != null) {
+                                    Map<String, Object> properties = Device.deviceProperties(preferences);
+
+                                    properties.put("gross_amount", details.getPrice());
+                                    properties.put("currency", details.getCurrency());
+                                    properties.put("product_id", productId);
+                                    properties.put("product_title", details.getTitle());
+                                    properties.put("product_token", purchaseToken);
+                                    properties.put("payment_system", "Google Play Store");
+
+                                    _track("payment", properties, purchaseTime);
+                                }
+
+                                return null;
                             }
                         }
-                        catch (RemoteException | JSONException e) {
-                            return null;
-                        }
-
-                        if (details != null) {
-                            Map<String, Object> properties = Device.deviceProperties(preferences);
-
-                            properties.put("gross_amount", details.getPrice());
-                            properties.put("currency", details.getCurrency());
-                            properties.put("product_id", productId);
-                            properties.put("product_title", details.getTitle());
-                            properties.put("product_token", purchaseToken);
-                            properties.put("payment_system", "Google Play Store");
-
-                            track("payment", properties, purchaseTime);
-                        }
-
-                        return null;
-                    }
-                }.execute(null, null, null);
-            }
-            catch (JSONException e) {
-                Log.e(Contract.TAG, "Cannot parse purchaseData");
+                    }.execute(null, null, null);
+                }
+                catch (JSONException e) {
+                    Log.e(Contract.TAG, "Cannot parse purchaseData");
+                }
             }
         }
     }
 
     public void loadAmazonProduct(JSONObject amazonJsonProductDataResponse){
-        amazonProduct = amazonJsonProductDataResponse;
+        synchronized (lockPublic) {
+            amazonProduct = amazonJsonProductDataResponse;
+        }
     }
 
     public void trackAmazonPurchases(JSONObject amazonJsonPurchaseResponse){
-        Map<String, Object> properties = Device.deviceProperties(preferences);
-        properties.put("payment_system", "Amazon Store");
-        try {
-            String sku = amazonJsonPurchaseResponse.getJSONObject("receipt").getString("sku");
-            if (amazonProduct != null){
-                try {
-                    String [] priceCurrency = splitPriceAndCurrency(amazonProduct.getJSONObject("productData").getJSONObject(sku).getString("price"));
-                    properties.put("gross_amount", priceCurrency[1]);
-                    properties.put("currency", priceCurrency[0]);
-                    properties.put("product_title", amazonProduct.getJSONObject("productData").getJSONObject(sku).getString("title"));
-                } catch (JSONException e) {
-                    Log.e(Contract.TAG, "Cannot parse productData from Amazon Store");
+        synchronized (lockPublic) {
+            Map<String, Object> properties = Device.deviceProperties(preferences);
+            properties.put("payment_system", "Amazon Store");
+            try {
+                String sku = amazonJsonPurchaseResponse.getJSONObject("receipt").getString("sku");
+                if (amazonProduct != null){
+                    try {
+                        String [] priceCurrency = splitPriceAndCurrency(amazonProduct.getJSONObject("productData").getJSONObject(sku).getString("price"));
+                        properties.put("gross_amount", priceCurrency[1]);
+                        properties.put("currency", priceCurrency[0]);
+                        properties.put("product_title", amazonProduct.getJSONObject("productData").getJSONObject(sku).getString("title"));
+                    } catch (JSONException e) {
+                        Log.e(Contract.TAG, "Cannot parse productData from Amazon Store");
+                    }
                 }
+                properties.put("product_id", sku);
+                properties.put("user_id", amazonJsonPurchaseResponse.getJSONObject("userData").getString("userId"));
+                properties.put("receipt", amazonJsonPurchaseResponse.getJSONObject("receipt").getString("receiptId"));
+                _track("payment", properties);
+            } catch (JSONException e) {
+                Log.e(Contract.TAG, "Cannot parse purchaseData from Amazon Store");
             }
-            properties.put("product_id", sku);
-            properties.put("user_id", amazonJsonPurchaseResponse.getJSONObject("userData").getString("userId"));
-            properties.put("receipt", amazonJsonPurchaseResponse.getJSONObject("receipt").getString("receiptId"));
-            track("payment", properties);
-        } catch (JSONException e) {
-            Log.e(Contract.TAG, "Cannot parse purchaseData from Amazon Store");
         }
     }
 
     public void trackVirtualPayment(String currency, int amount, String itemName, String itemType){
-        Map<String, Object> virtualPayment = Device.deviceProperties(preferences);
-        virtualPayment.put("currency", currency);
-        virtualPayment.put("amount", amount);
-        virtualPayment.put("item_name", itemName);
-        virtualPayment.put("item_type", itemType);
-        track("virtual_payment", virtualPayment);
+        synchronized (lockPublic) {
+            Map<String, Object> virtualPayment = Device.deviceProperties(preferences);
+            virtualPayment.put("currency", currency);
+            virtualPayment.put("amount", amount);
+            virtualPayment.put("item_name", itemName);
+            virtualPayment.put("item_type", itemType);
+            _track("virtual_payment", virtualPayment);
+        }
     }
 
     private void trackLogError(String tag, String message){
@@ -564,105 +624,93 @@ public class Infinario {
      * Return name of segment
      */
     public void getCurrentSegment(final String segmentationId, final String projectSecretToken, final SegmentListener listener){
-        this.listener = listener;
+        synchronized (lockPublic) {
+            if (Preferences.get(context).getTarget().startsWith("https")){
+                new AsyncTask<Void, Void, JSONObject>(){
 
-        if (Preferences.get(context).getTarget().startsWith("https")){
-            new AsyncTask<Void, Void, JSONObject>(){
+                    @Override
+                    protected JSONObject doInBackground(Void... params) {
+                        HttpURLConnection connection = null;
 
-                @Override
-                protected JSONObject doInBackground(Void... params) {
-                    HttpURLConnection connection = null;
+                        try {
+                            URL url;
+                            synchronized (lockPublic) {
+                                url = new URL(Preferences.get(context).getTarget() + Contract.SEGMENT_URL);
+                            }
+                            connection = (HttpURLConnection) url.openConnection();
+                            connection.setDoOutput(true);
+                            connection.setDoInput(true);
+                            connection.setConnectTimeout(2000);
+                            connection.setReadTimeout(2000);
+                            connection.setRequestProperty("Content-Type", "application/json");
+                            connection.setRequestProperty("Accept", "application/json");
+                            connection.setRequestProperty("X-Infinario-Secret", projectSecretToken);
 
-                    try {
-                        URL url = new URL(Preferences.get(context).getTarget() + Contract.SEGMENT_URL);
-                        connection = (HttpURLConnection) url.openConnection();
-                        connection.setDoOutput(true);
-                        connection.setDoInput(true);
-                        connection.setConnectTimeout(2000);
-                        connection.setReadTimeout(2000);
-                        connection.setRequestProperty("Content-Type", "application/json");
-                        connection.setRequestProperty("Accept", "application/json");
-                        connection.setRequestProperty("X-Infinario-Secret", projectSecretToken);
+                            synchronized (lockPublic) {
+                                connection.setRequestProperty("User-Agent", userAgent);
+                            }
 
-                        connection.setRequestMethod("POST");
+                            connection.setRequestMethod("POST");
 
-                        JSONObject main = new JSONObject();
-                        JSONObject ids = new JSONObject();
+                            JSONObject main = new JSONObject();
+                            JSONObject ids = new JSONObject();
 
-                        ids.put(Contract.COOKIE, customer.get(Contract.COOKIE));
-                        ids.put(Contract.REGISTERED, customer.get(Contract.REGISTERED));
+                            synchronized (lockPublic) {
+                                ids.put(Contract.COOKIE, customer.get(Contract.COOKIE));
+                                ids.put(Contract.REGISTERED, customer.get(Contract.REGISTERED));
+                            }
 
-                        main.put("customer_ids", ids);
-                        main.put("analysis_id", segmentationId);
+                            main.put("customer_ids", ids);
+                            main.put("analysis_id", segmentationId);
 
-                        connection.connect();
+                            connection.connect();
 
-                        DataOutputStream body = new DataOutputStream(connection.getOutputStream());
-                        body.writeBytes(main.toString());
-                        body.close();
+                            DataOutputStream body = new DataOutputStream(connection.getOutputStream());
+                            body.writeBytes(main.toString());
+                            body.close();
 
-                        InputStream is = connection.getInputStream();
-                        BufferedReader responseBuffer = new BufferedReader(new InputStreamReader(is));
-                        StringWriter response = new StringWriter();
-                        char[] buffer = new char[1024 * 4];
-                        int n = 0;
-                        while (-1 != (n = responseBuffer.read(buffer))) {
-                            response.write(buffer, 0, n);
+                            InputStream is = connection.getInputStream();
+                            BufferedReader responseBuffer = new BufferedReader(new InputStreamReader(is));
+                            StringWriter response = new StringWriter();
+                            char[] buffer = new char[1024 * 4];
+                            int n = 0;
+                            while (-1 != (n = responseBuffer.read(buffer))) {
+                                response.write(buffer, 0, n);
+                            }
+
+                            return new JSONObject(response.toString());
+                        } catch (MalformedURLException e) {
+                            Log.e(Contract.TAG, e.toString());
+                        } catch (IOException e) {
+                            Log.e(Contract.TAG, e.toString());
+                        } catch (JSONException e) {
+                            Log.e(Contract.TAG, e.toString());
+                        } finally {
+                            if (connection != null){
+                                connection.disconnect();
+                            }
                         }
 
-                        return new JSONObject(response.toString());
-                    } catch (MalformedURLException e) {
-                        Log.e(Contract.TAG, e.toString());
-                    } catch (IOException e) {
-                        Log.e(Contract.TAG, e.toString());
-                    } catch (JSONException e) {
-                        Log.e(Contract.TAG, e.toString());
-                    } finally {
-                        if (connection != null){
-                            connection.disconnect();
-                        }
+                        return null;
                     }
 
-                    return null;
-                }
-
-                @Override
-                protected void onPostExecute(JSONObject result){
-                    if (result != null){
-                        if (result.optBoolean("success")){
-                            listener.onSegmentReceive(true, new InfinarioSegment().setName(result.optString("segment")), null);
+                    @Override
+                    protected void onPostExecute(JSONObject result){
+                        if (result != null){
+                            if (result.optBoolean("success")){
+                                listener.onSegmentReceive(true, new InfinarioSegment().setName(result.optString("segment")), null);
+                            } else {
+                                listener.onSegmentReceive(false, null, "Unsuccesfull response");
+                            }
                         } else {
-                            listener.onSegmentReceive(false, null, "Unsuccesfull response");
+                            listener.onSegmentReceive(false, null, "Null response");
                         }
-                    } else {
-                        listener.onSegmentReceive(false, null, "Null response");
                     }
-                }
-            }.execute();
-        } else {
-            listener.onSegmentReceive(false, null, "Target must be https");
-        }
-    }
-
-    /**
-     * Flushes the updates / events to Infinario API asynchronously.
-     */
-    public static void flush(final Context context) {
-        new AsyncTask<Void, Void, Void>() {
-            @Override
-            protected Void doInBackground(Void... params) {
-                if (isConnected(context)) {
-                    CommandManager commandManager = new CommandManager(context, Preferences.get(context).getTarget());
-                    commandManager.flush();
-                    setConnectivityMonitor(context, false);
-                }
-                else {
-                    setConnectivityMonitor(context, true);
-                }
-
-                return null;
+                }.execute();
+            } else {
+                listener.onSegmentReceive(false, null, "Target must be https");
             }
-        }.execute(null, null, null);
+        }
     }
 
     /**
@@ -670,30 +718,7 @@ public class Infinario {
      */
     @SuppressWarnings("unused")
     public void flush() {
-        flush(context);
-    }
-
-    /**
-     * Sets up periodic alarm for automatic flushing of the events. Default interval
-     * is set to 6 hours. Periodic alarm doesn't wake the device (alarm type is RTC)
-     * for better battery saving.
-     *
-     * @param context application's context
-     */
-    public static void setupPeriodicAlarm(Context context) {
-        getAlarmManager(context).setInexactRepeating(AlarmManager.RTC,
-                System.currentTimeMillis() + Contract.UPDATE_INTERVAL,
-                Contract.UPDATE_INTERVAL,
-                getAlarmIntent(context, Contract.PERIODIC_ALARM));
-    }
-
-    /**
-     * Cancels periodic alarm if it is enabled, otherwise does nothing.
-     *
-     * @param context application's context
-     */
-    public static void cancelPeriodicAlarm(Context context) {
-        getAlarmManager(context).cancel(getAlarmIntent(context, Contract.PERIODIC_ALARM));
+        commandManager.flush(Contract.MAX_RETRIES);
     }
 
     /**
@@ -701,8 +726,10 @@ public class Infinario {
      */
     @SuppressWarnings("UnusedDeclaration")
     public void enableAutomaticFlushing() {
-        preferences.setAutomaticFlushing(true);
-        setupPeriodicAlarm(context);
+        synchronized (lockPublic) {
+            preferences.setAutomaticFlushing(true);
+            startFlushTimer();
+        }
     }
 
     /**
@@ -710,8 +737,10 @@ public class Infinario {
      */
     @SuppressWarnings("unused")
     public void disableAutomaticFlushing() {
-        preferences.setAutomaticFlushing(false);
-        cancelPeriodicAlarm(context);
+        synchronized (lockPublic) {
+            preferences.setAutomaticFlushing(false);
+            stopFlushTimer();
+        }
     }
 
     /**
@@ -731,24 +760,26 @@ public class Infinario {
      */
     @SuppressWarnings("unused")
     public void enableGooglePushNotifications(String senderId, int iconDrawable) {
-        preferences.setGooglePushNotifications(true);
+        synchronized (lockPublic) {
+            preferences.setGooglePushNotifications(true);
 
-        // Check device for Play Services APK. If check succeeds, proceed with GCM registration.
-        if (checkPlayServices(context)) {
-            gcm = GoogleCloudMessaging.getInstance(context);
-            registrationId = preferences.getRegistrationId();
+            // Check device for Play Services APK. If check succeeds, proceed with GCM registration.
+            if (checkPlayServices(context)) {
+                gcm = GoogleCloudMessaging.getInstance(context);
+                registrationId = preferences.getRegistrationId();
 
-            preferences.setSenderId(senderId);
-            preferences.setIcon(iconDrawable);
+                preferences.setSenderId(senderId);
+                preferences.setIcon(iconDrawable);
 
-            if (registrationId.isEmpty()) {
-                registerInBackground();
-            } else {
-                Log.i(Contract.TAG, "Already registered");
+                if (registrationId.isEmpty()) {
+                    registerInBackground();
+                } else {
+                    Log.i(Contract.TAG, "Already registered");
+                }
             }
-        }
-        else {
-            Log.i(Contract.TAG, "No valid Google Play Services APK found.");
+            else {
+                Log.i(Contract.TAG, "No valid Google Play Services APK found.");
+            }
         }
     }
 
@@ -796,7 +827,9 @@ public class Infinario {
      */
     @SuppressWarnings("unused")
     public void disableGooglePushNotifications() {
-        preferences.setGooglePushNotifications(false);
+        synchronized (lockPublic) {
+            preferences.setGooglePushNotifications(false);
+        }
     }
 
     /**
@@ -815,10 +848,10 @@ public class Infinario {
             String senderId = preferences.getSenderId();
 
             if (!extras.isEmpty() &&
-                    senderId != null &&
-                    !senderId.equals("") &&
-                    GoogleCloudMessaging.MESSAGE_TYPE_MESSAGE.equals(messageType) &&
-                    extras.getString("from").equals(senderId)) {
+                senderId != null &&
+                !senderId.equals("") &&
+                GoogleCloudMessaging.MESSAGE_TYPE_MESSAGE.equals(messageType) &&
+                extras.getString("from").equals(senderId)) {
 
                 Log.d(Contract.TAG, "Received data: " + intent.getExtras().toString());
                 sendNotification(context, intent.getExtras(), preferences.getIcon());
@@ -828,7 +861,9 @@ public class Infinario {
 
     @SuppressWarnings("UnusedDeclaration")
     public void clearStoredData() {
-        preferences.clearStoredData();
+        synchronized (lockPublic) {
+            preferences.clearStoredData();
+        }
     }
 
     /**
@@ -840,88 +875,6 @@ public class Infinario {
         Map<String, String> customer_ids = new HashMap<>();
         customer_ids.put(Contract.REGISTERED, customer);
        return customer_ids;
-    }
-
-    /** Disable session listener
-     * private void setupSession() {
-        session = new Session(preferences, new SessionListener() {
-            @Override
-            void onSessionStart(long timestamp) {
-                Log.d(Contract.TAG, "session started");
-
-                Map<String, Object> properties = session.defaultProperties();
-                properties.putAll(sessionProperties);
-
-                track("session_start", properties, timestamp);
-            }
-
-            @Override
-            void onSessionEnd(long timestamp, long duration) {
-                Log.d(Contract.TAG, "session finished, duration = " + duration);
-
-                Map<String, Object> properties = session.defaultProperties(duration);
-                properties.putAll(sessionProperties);
-
-                track("session_end", properties, timestamp);
-            }
-
-            @Override
-            void onSessionRestart(Map<String, String> newCustomer) {
-                customer = newCustomer;
-            }
-        });
-
-        session.run();
-    }
-     */
-
-    /**
-     * Sets up delayed alarm for automatic flushing of events. Each call to {@code track()} or
-     * {@code update()} resets the delayed alarm to accumulate several events and updates together
-     * to send them in a single batch. Delayed alarm fires off if there is more than 10
-     * seconds between two calls of {@code track()} or {@code update()} or the two
-     * mentioned methods are called more than 50 times in a row.
-     *
-     * Delayed alarm is disabled if {@code automaticFlushing()} returns false.
-     */
-    private void setupDelayedAlarm() {
-        PendingIntent alarmIntent = getAlarmIntent(context, Contract.DELAYED_ALARM);
-
-        if (commandCounter > 0) {
-            commandCounter--;
-
-            getAlarmManager(context).set(AlarmManager.RTC,
-                    System.currentTimeMillis() + Contract.FLUSH_DELAY,
-                    alarmIntent);
-        }
-        else {
-            commandCounter = Contract.FLUSH_COUNT;
-            context.sendBroadcast(getIntent(context, Contract.IMMEDIATE_ALARM));
-        }
-    }
-
-    /**
-     * Prepares alarm intent.
-     *
-     * @param context application's context
-     * @param requestCode {@code Contract.PERIODIC_ALARM}, {@code Contract.IMMEDIATE_ALARM} or {@code Contract.DELAYED_ALARM}
-     * @return intent for AlarmReceiver
-     */
-    private static Intent getIntent(Context context, int requestCode) {
-        Intent intent = new Intent(context, AlarmReceiver.class);
-        intent.putExtra(Contract.EXTRA_REQUEST_CODE, requestCode);
-        return intent;
-    }
-
-    /**
-     * Prepares alarm pending intent.
-     *
-     * @param context application's context
-     * @param requestCode {@code Contract.PERIODIC_ALARM}, {@code Contract.IMMEDIATE_ALARM} or {@code Contract.DELAYED_ALARM}
-     * @return pending intent for AlarmReceiver
-     */
-    private static PendingIntent getAlarmIntent(Context context, int requestCode) {
-        return PendingIntent.getBroadcast(context, requestCode, getIntent(context, requestCode), 0);
     }
 
     /**
@@ -984,7 +937,7 @@ public class Infinario {
         Log.i(Contract.TAG, "Sending registration ID to backend");
         Map<String, Object> properties = new HashMap<>();
         properties.put(Contract.DB_GOOGLE_REGISTRATION_ID, registrationId);
-        update(properties);
+        _update(properties);
     }
 
     /**
@@ -1019,49 +972,6 @@ public class Infinario {
     }
 
     /**
-     * Checks connectivity to Infinario API.
-     *
-     * @param context application's context
-     * @return true if there is connectivity to Infinario API, false otherwise
-     */
-    private static boolean isConnected(Context context) {
-        ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
-        NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
-
-        if (activeNetwork != null && activeNetwork.isConnected()) {
-            try {
-                URL url = new URL(Preferences.get(context).getTarget() + Contract.PING_TARGET);
-                HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
-                urlConnection.setRequestProperty("User-Agent", "test");
-                urlConnection.setRequestProperty("Connection", "close");
-                urlConnection.setConnectTimeout(1000);
-                urlConnection.connect();
-
-                return (200 == urlConnection.getResponseCode());
-            } catch (IOException e) {
-                Log.i(Contract.TAG, "Error while checking the internet connection", e);
-                return false;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Enables / disables broadcast receiver for monitoring network state changes.
-     *
-     * @param context application's context
-     */
-    private static void setConnectivityMonitor(Context context, boolean enabled) {
-        ComponentName receiver = new ComponentName(context, ConnectivityReceiver.class);
-        PackageManager packageManager = context.getPackageManager();
-
-        packageManager.setComponentEnabledSetting(receiver,
-                (enabled ? PackageManager.COMPONENT_ENABLED_STATE_ENABLED : PackageManager.COMPONENT_ENABLED_STATE_DISABLED),
-                PackageManager.DONT_KILL_APP);
-    }
-
-    /**
      * @return return drawable id by string
      */
     private int getDrawableId(String nameDrawable){
@@ -1087,9 +997,11 @@ public class Infinario {
                     AdvertisingIdClient.Info adInfo = AdvertisingIdClient.getAdvertisingIdInfo(context);
                     preferences.setGoogleAdvertisingId(adInfo.getId());
 
-                    HashMap<String,Object> advId = new HashMap<String, Object>();
-                    advId.put(Contract.PROPERTY_GOOGLE_ADV_ID,adInfo.getId());
-                    update(advId);
+                    synchronized (lockPublic) {
+                        HashMap<String,Object> advId = new HashMap<String, Object>();
+                        advId.put(Contract.PROPERTY_GOOGLE_ADV_ID,adInfo.getId());
+                        _update(advId);
+                    }
                 } catch (Exception e) {
                     Log.e(Contract.TAG, "Cannot initialize google advertising ID");
                 }
@@ -1138,5 +1050,22 @@ public class Infinario {
      */
     public interface SegmentListener{
         void onSegmentReceive(boolean wasSuccessful, InfinarioSegment segment, String error);
+    }
+
+    private void startFlushTimer(){
+        synchronized (lockFlushTimer){
+            if (sessionHandler != null){
+                stopFlushTimer();
+                sessionHandler.postDelayed(sessionFlushRunnable, Contract.FLUSH_DELAY);
+            }
+        }
+    }
+
+    private void stopFlushTimer(){
+        synchronized (lockFlushTimer){
+            if(sessionHandler != null){
+                sessionHandler.removeCallbacks(sessionFlushRunnable);
+            }
+        }
     }
 }
