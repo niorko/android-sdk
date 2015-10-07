@@ -44,11 +44,6 @@ public class CommandManager {
     }
 
     public boolean executeBatch() {
-        if (!preferences.ensureCookieId()) {
-            Log.d(Contract.TAG, "Failed to negotiate cookie ID");
-            return false;
-        }
-
         Set<Integer> deleteRequests = new HashSet<>();
         Set<Integer> successfulRequests = new HashSet<>();
         JSONArray results;
@@ -194,11 +189,11 @@ public class CommandManager {
             JSONObject data = command.getJSONObject("data");
 
             if (data.has("ids") && data.getJSONObject("ids").getString("cookie").isEmpty()) {
-                data.getJSONObject("ids").put("cookie", preferences.getCampaignCookieId());
+                data.getJSONObject("ids").put("cookie", preferences.getCookieId());
             }
 
             if (data.has("customer_ids") && data.getJSONObject("customer_ids").getString("cookie").isEmpty()) {
-                data.getJSONObject("customer_ids").put("cookie", preferences.getCampaignCookieId());
+                data.getJSONObject("customer_ids").put("cookie", preferences.getCookieId());
             }
         }
         catch (JSONException ignored) {

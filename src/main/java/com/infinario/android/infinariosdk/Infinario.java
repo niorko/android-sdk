@@ -15,6 +15,7 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.RemoteException;
+import android.provider.Settings;
 import android.support.v4.app.NotificationCompat;
 import android.util.DisplayMetrics;
 import android.util.Log;
@@ -102,6 +103,10 @@ public class Infinario {
 
         if (preferences.getDeviceType().isEmpty()){
             initializeDeviceType();
+        }
+
+        if (preferences.getCookieId().isEmpty()){
+            preferences.setCookieId(Settings.Secure.getString(context.getContentResolver(), Settings.Secure.ANDROID_ID));
         }
 
         userAgent = UserAgent.create(preferences);
