@@ -56,7 +56,7 @@ public class HttpHelper {
         try {
             entity = new StringEntity(data.toString());
         } catch (UnsupportedEncodingException e) {
-            e.printStackTrace();
+            Log.e(Contract.TAG, e.getMessage().toString());
         }
 
         httppost.setEntity(entity);

@@ -68,7 +68,7 @@ public class CommandManager {
         try {
             payload.put("commands", commands);
         } catch (JSONException e) {
-            e.printStackTrace();
+            Log.e(Contract.TAG, e.getMessage().toString());
         }
 
         data = http.post(Contract.BULK_URL, payload);
@@ -84,6 +84,7 @@ public class CommandManager {
                 results = data.getJSONArray("results");
             } catch (JSONException e) {
                 results = null;
+                Log.e(Contract.TAG, e.getMessage().toString());
             }
 
             if (results != null) {
@@ -100,17 +101,19 @@ public class CommandManager {
                             deleteRequests.add(request.getId());
                         }
                     } catch (JSONException e) {
-                        e.printStackTrace();
+                        Log.e(Contract.TAG, e.getMessage().toString());
                     }
                 }
                 logResult.append(successfulRequests.size())
                         .append(" succeeded, ")
                         .append(deleteRequests.size() - successfulRequests.size());
             } else {
+                Log.e(Contract.TAG, "Results are null");
                 logResult.append("0 succeeded, ")
                         .append(requests.size());
             }
         } else {
+            Log.e(Contract.TAG, "Data is null");
             logResult.append("0 succeeded, ")
                     .append(requests.size());
         }
