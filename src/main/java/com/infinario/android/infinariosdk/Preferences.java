@@ -11,6 +11,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.UUID;
 
@@ -188,13 +189,23 @@ public class Preferences {
         return getPreferences(context).getLong(Contract.PROPERTY_SESSION_END, -1);
     }
 
+    public Map<String, Object> getSessionEndProperties() {
+        return jsonToMap(getPreferences(context).getString(Contract.PROPERTY_SESSION_END_PROPERTIES, ""));
+    }
+
     /**
      * Stores session end.
      *
      * @param value timestamp in milliseconds
+     * @param properties Map of custom properties
      */
-    public void setSessionEnd(long value) {
+    public void setSessionEnd(long value, Map<String, Object> properties) {
         getPreferences(context).edit().putLong(Contract.PROPERTY_SESSION_END, value).commit();
+        if (properties != null) {
+            getPreferences(context).edit().putString(Contract.PROPERTY_SESSION_END_PROPERTIES, new JSONObject(properties).toString()).commit();
+        } else {
+            getPreferences(context).edit().putString(Contract.PROPERTY_SESSION_END_PROPERTIES, "").commit();
+        }
     }
 
     /**
@@ -375,5 +386,31 @@ public class Preferences {
                 .remove(Contract.PROPERTY_GOOGLE_ADV_ID)
                 .remove(Contract.PROPERTY_DEVICE_TYPE)
                 .commit();
+    }
+
+    private Map<String, Object> jsonToMap(String json){
+        try {
+            if (json.isEmpty()) {
+                return null;
+            }
+
+            JSONObject jsonObj = new JSONObject(json);
+            Iterator it = jsonObj.keys();
+            Map<String, Object> map = new HashMap<>();
+
+            while(it.hasNext())
+            {
+                String key = it.next().toString();
+                map.put(key, jsonObj.get(key));
+            }
+
+            return map;
+        } catch (JSONException e){
+            Log.e(Contract.TAG, e.getMessage().toString());
+        } catch (NullPointerException e){
+            Log.e(Contract.TAG, e.getMessage().toString());
+        }
+
+        return null;
     }
 }

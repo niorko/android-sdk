@@ -81,6 +81,14 @@ Session is a real time spent in the game, it starts when the game is launched an
         super.onStart();
 
         infinario.trackSessionStart();
+
+        /* or with properties
+
+        <pre><code>Map&lt;String, Object&gt; properties = new HashMap&lt;&gt;();
+        properties.put("item_id", 45);
+
+        infinario.trackSessionStart(properties);
+        */
     }
 
     @Override
@@ -88,6 +96,14 @@ Session is a real time spent in the game, it starts when the game is launched an
         super.onStop();
 
         infinario.trackSessionEnd();
+
+        /* or with properties
+
+        <pre><code>Map&lt;String, Object&gt; properties = new HashMap&lt;&gt;();
+        properties.put("item_id", 45);
+
+        infinario.trackSessionEnd(properties);
+        */
     }</code></pre>
 <p>Both events contain the timestamp of the occurence together with basic attributes about the device (OS, OS version, SDK, SDK version and device model). Event <code>session_end</code> contains also the duration of the session in seconds. Example of <code>session_end</code> event attributes in <em>JSON</em> format:
 </p>

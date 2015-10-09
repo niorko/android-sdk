@@ -37,6 +37,7 @@ public class Contract {
     public static final String PROPERTY = "infinario";
     public static final String PROPERTY_SESSION_START = "session_start";
     public static final String PROPERTY_SESSION_END = "session_end";
+    public static final String PROPERTY_SESSION_END_PROPERTIES = "session_end_properties";
     public static final String EXTRA_REQUEST_CODE = "request_code";
     public static final String PROPERTY_GOOGLE_ADV_ID = "google_advertising_id";
     public static final String PROPERTY_DEVICE_TYPE = "device_type";

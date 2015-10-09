@@ -130,7 +130,7 @@ public class Infinario {
             public void run() {
                 synchronized (lockPublic) {
                     if (preferences.getSessionEnd() != -1) {
-                        sessionEnd(preferences.getSessionEnd(), (preferences.getSessionEnd() - preferences.getSessionStart()) / 1000L);
+                        sessionEnd(preferences.getSessionEnd(), (preferences.getSessionEnd() - preferences.getSessionStart()) / 1000L, preferences.getSessionEndProperties());
                     }
                 }
             }
@@ -302,33 +302,22 @@ public class Infinario {
         return false;
     }
 
-    private void sessionStart(long timeStamp){
+    private void sessionStart(long timeStamp, Map<String, Object> properties){
         preferences.setSessionStart(timeStamp);
-
-        Map<String, Object> properties = Device.deviceProperties(preferences);
-        String appVersionName = preferences.getAppVersionName();
-        if (appVersionName != null){
-            properties.put("app_version", appVersionName);
-        }
-
-        _track("session_start", properties, timeStamp);
+        _track("session_start", mergeProperties(properties, -1), timeStamp);
     }
 
-    private void sessionEnd(long timeStamp, long duration){
-        Map<String, Object> properties = Device.deviceProperties(preferences);
-        String appVersionName = preferences.getAppVersionName();
-        if (appVersionName != null){
-            properties.put("app_version", appVersionName);
-        }
-        properties.put("duration", duration);
-
-        _track("session_end", properties, timeStamp);
-
+    private void sessionEnd(long timeStamp, long duration, Map<String, Object> properties){
+        _track("session_end", mergeProperties(properties, duration), timeStamp);
         preferences.setSessionStart(-1);
-        preferences.setSessionEnd(-1);
+        preferences.setSessionEnd(-1, null);
     }
 
     public void trackSessionStartImpl(){
+        trackSessionStartImpl(null);
+    }
+
+    public void trackSessionStartImpl(Map<String, Object> properties){
         synchronized (lockPublic){
             long now = (new Date()).getTime();
             long sessionEnd = preferences.getSessionEnd();
@@ -341,18 +330,18 @@ public class Infinario {
             if (sessionEnd != -1){
                 if (now - sessionEnd > sessionTimeOut){
                     //Create session end
-                    sessionEnd(sessionEnd, (sessionEnd - sessionStart) / 1000L);
+                    sessionEnd(sessionEnd, (sessionEnd - sessionStart) / 1000L, preferences.getSessionEndProperties());
                     //Create session start
-                    sessionStart(now);
+                    sessionStart(now, properties);
                 } else {
                     //Continue in current session
                 }
             } else  if (sessionStart == -1){
                 //Create session start
-                sessionStart(now);
+                sessionStart(now, properties);
             } else if (now - sessionStart > sessionTimeOut) {
                 //Create session start
-                sessionStart(now);
+                sessionStart(now, properties);
             } else {
                 //Continue in current session
             }
@@ -360,9 +349,13 @@ public class Infinario {
     }
 
     public void trackSessionEndImpl(){
+        trackSessionEndImpl(null);
+    }
+
+    public void trackSessionEndImpl(Map<String, Object> properties){
         synchronized (lockPublic){
             //Save session end with current timestamp and start count TIMEOUT
-            preferences.setSessionEnd((new Date()).getTime());
+            preferences.setSessionEnd((new Date()).getTime(), properties);
             sessionHandler.postDelayed(sessionEndRunnable, sessionTimeOut);
         }
     }
@@ -373,7 +366,11 @@ public class Infinario {
         }
     }
 
-    public void trackSessionStart(){        
+    public void trackSessionStart(){
+        trackSessionStart(null);
+    }
+
+    public void trackSessionStart(Map<String, Object> properties){
         int _sessionCounter = 0;
         synchronized (lockPublic) {
             sessionCounter += 1;
@@ -381,11 +378,15 @@ public class Infinario {
         }
 
         if (_sessionCounter == 1){
-            trackSessionStartImpl();
+            trackSessionStartImpl(properties);
         }
     }
 
     public void trackSessionEnd(){
+        trackSessionEnd(null);
+    }
+
+    public void trackSessionEnd(Map<String, Object> properties){
         int _sessionCounter = 0;
         synchronized (lockPublic){
             if (sessionCounter > 0){
@@ -395,8 +396,24 @@ public class Infinario {
         }
 
         if (_sessionCounter == 0) {
-            trackSessionEndImpl();
+            trackSessionEndImpl(properties);
         }
+    }
+
+    private Map<String, Object> mergeProperties(Map<String, Object> properties, long duration) {
+        Map<String, Object> deviceProperties = Device.deviceProperties(preferences);
+        String appVersionName = preferences.getAppVersionName();
+        if (appVersionName != null){
+            deviceProperties.put("app_version", appVersionName);
+        }
+        if (duration != -1){
+            deviceProperties.put("duration", duration);
+        }
+        if (properties != null) {
+            deviceProperties.putAll(properties);
+        }
+
+        return deviceProperties;
     }
 
     /**
