@@ -647,28 +647,15 @@ public class Infinario {
 
                     @Override
                     protected JSONObject doInBackground(Void... params) {
-                        HttpURLConnection connection = null;
+                        HttpHelper http;
+
+                        synchronized (lockPublic){
+                            http = new HttpHelper(Preferences.get(context).getTarget(), userAgent)
+                                    .addRequestProperty("X-Infinario-Secret", projectSecretToken)
+                                    .setTimeout(2000);
+                        }
 
                         try {
-                            URL url;
-                            synchronized (lockPublic) {
-                                url = new URL(Preferences.get(context).getTarget() + Contract.SEGMENT_URL);
-                            }
-                            connection = (HttpURLConnection) url.openConnection();
-                            connection.setDoOutput(true);
-                            connection.setDoInput(true);
-                            connection.setConnectTimeout(2000);
-                            connection.setReadTimeout(2000);
-                            connection.setRequestProperty("Content-Type", "application/json");
-                            connection.setRequestProperty("Accept", "application/json");
-                            connection.setRequestProperty("X-Infinario-Secret", projectSecretToken);
-
-                            synchronized (lockPublic) {
-                                connection.setRequestProperty("User-Agent", userAgent);
-                            }
-
-                            connection.setRequestMethod("POST");
-
                             JSONObject main = new JSONObject();
                             JSONObject ids = new JSONObject();
 
@@ -680,32 +667,9 @@ public class Infinario {
                             main.put("customer_ids", ids);
                             main.put("analysis_id", segmentationId);
 
-                            connection.connect();
-
-                            DataOutputStream body = new DataOutputStream(connection.getOutputStream());
-                            body.writeBytes(main.toString());
-                            body.close();
-
-                            InputStream is = connection.getInputStream();
-                            BufferedReader responseBuffer = new BufferedReader(new InputStreamReader(is));
-                            StringWriter response = new StringWriter();
-                            char[] buffer = new char[1024 * 4];
-                            int n = 0;
-                            while (-1 != (n = responseBuffer.read(buffer))) {
-                                response.write(buffer, 0, n);
-                            }
-
-                            return new JSONObject(response.toString());
-                        } catch (MalformedURLException e) {
-                            Log.e(Contract.TAG, e.toString());
-                        } catch (IOException e) {
-                            Log.e(Contract.TAG, e.toString());
+                            return http.post(Contract.SEGMENT_URL, main);
                         } catch (JSONException e) {
                             Log.e(Contract.TAG, e.toString());
-                        } finally {
-                            if (connection != null){
-                                connection.disconnect();
-                            }
                         }
 
                         return null;
