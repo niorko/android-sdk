@@ -421,7 +421,7 @@ public class Infinario {
      *
      * @param type       event's type
      * @param properties event's properties
-     * @param timestamp  event's timestamp in seconds
+     * @param timestamp  event's timestamp in milliseconds
      * @return success of the operation
      */
     public boolean track(String type, Map<String, Object> properties, Long timestamp) {
@@ -471,7 +471,7 @@ public class Infinario {
      * Tracks an event for a customer. Cannot be called prior to the identification.
      *
      * @param type event's type
-     * @param timestamp event's timestamp in seconds
+     * @param timestamp event's timestamp in milliseconds
      * @return success of the operation
      */
     public boolean track(String type, Long timestamp) {
