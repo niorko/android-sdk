@@ -33,10 +33,10 @@ The identification is performed asynchronously and there is no need to wait for 
 
 You may track any event by calling the <code>track()</code> method on the Infinario instance. The <code>track()</code> method takes one mandatory and two optional arguments. First argument is <code>String type</code> which categorizes your event. This argument is <strong>required</strong>. You may choose any string you like.
 
-Next two arguments are <code>Map&lt;String, Object&gt; properties</code> and <code>Long timestamp</code>. Properties is a map which uses <code>String</code> keys and the value may be any <code>Object</code> which is serializable by <code>org.json.JSONObject</code> class. Properties can be used to attach any additional data to the event. Timestamp is standard UNIX timestamp in seconds and it can be used to mark the time of the event's occurence. The default timestamp is preset to the time of the tracking of the event.
+Next two arguments are <code>Map&lt;String, Object&gt; properties</code> and <code>Long timestamp</code>. Properties is a map which uses <code>String</code> keys and the value may be any <code>Object</code> which is serializable by <code>org.json.JSONObject</code> class. Properties can be used to attach any additional data to the event. Timestamp is in milliseconds since 1970-01-01 00:00:00 GMT and it can be used to mark the time of the event's occurence. The default timestamp is preset to the time of the tracking of the event.
 <pre><code>Map&lt;String, Object&gt; properties = new HashMap&lt;&gt;();
 properties.put("item_id", 45);
-Long timestamp = System.currentTimeMillis() * 1000L;
+Long timestamp = System.currentTimeMillis();
 
 // Tracking of buying an item with item's properties at a specific time
 track("item_bought", properties, timestamp);
