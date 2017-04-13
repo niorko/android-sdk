@@ -109,24 +109,6 @@ public class Preferences {
     }
 
     /**
-     * Gets token from preferences.
-     *
-     * @return token
-     */
-    public String getToken() {
-        return getPreferences(context).getString(Contract.PROPERTY_TOKEN, null);
-    }
-
-    /**
-     * Stores token in preferences.
-     *
-     * @param token token
-     */
-    public void setToken(String token) {
-        getPreferences(context).edit().putString(Contract.PROPERTY_TOKEN, token).commit();
-    }
-
-    /**
      * Gets target (Infinario API location) from preferences.
      *
      * @return Infinario API location
