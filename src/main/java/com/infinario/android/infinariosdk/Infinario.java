@@ -50,7 +50,6 @@ public class Infinario {
     private static Infinario instance = null;
 
     private GoogleCloudMessaging gcm = null;
-    private String token;
     private String registrationId;
     private String userAgent;
     private Map<String, String> customer;
@@ -72,12 +71,19 @@ public class Infinario {
     private Runnable sessionFlushRunnable;
     private int sessionCounter;
 
-    private Infinario(Context context, String token, String target, Map<String, String> customer) {
-        this.token = token;
+    /**
+     * Temporary tokens for sessionEndRunnable.
+     * This event could be delayed due to cancelation,
+     * so we need to store them for future usage.
+     */
+    private String[] endSessionTokens;
+
+    private Infinario(Context context, String target,
+                      Map<String, String> customer, String... tokens) {
+
         this.context = context.getApplicationContext();
 
         preferences = Preferences.get(context);
-        preferences.setToken(token);
 
         sessionProperties = new HashMap<>();
         sessionTimeOut = Contract.SESSION_TIMEOUT;
@@ -87,15 +93,15 @@ public class Infinario {
             preferences.setTarget(target.replaceFirst("/*$", ""));
         }
 
-        if (preferences.getGoogleAdvertisingId().isEmpty()){
-            initializeGoogleAdvertisingId();
+        if (preferences.getGoogleAdvertisingId().isEmpty()) {
+            initializeGoogleAdvertisingId(tokens);
         }
 
-        if (preferences.getDeviceType().isEmpty()){
+        if (preferences.getDeviceType().isEmpty()) {
             initializeDeviceType();
         }
 
-        if (preferences.getCookieId().isEmpty()){
+        if (preferences.getCookieId().isEmpty()) {
             preferences.setCookieId(Settings.Secure.getString(context.getContentResolver(), Settings.Secure.ANDROID_ID));
         }
 
@@ -119,8 +125,9 @@ public class Infinario {
         sessionEndRunnable = new Runnable() {
             public void run() {
                 synchronized (lockPublic) {
-                    if (preferences.getSessionEnd() != -1) {
-                        sessionEnd(preferences.getSessionEnd(), (preferences.getSessionEnd() - preferences.getSessionStart()) / 1000L, preferences.getSessionEndProperties());
+                    if (preferences.getSessionEnd() != -1 && endSessionTokens != null) {
+                        long duration = (preferences.getSessionEnd() - preferences.getSessionStart()) / 1000L;
+                        sessionEnd(preferences.getSessionEnd(), duration, preferences.getSessionEndProperties(), endSessionTokens);
                     }
                 }
             }
@@ -142,17 +149,17 @@ public class Infinario {
      * Obtains instance of Infinario instance to work with and identifies the customer.
      *
      * @param context  application's context
-     * @param token    project token obtained from Infinario admin
      * @param target   Infinario API location
      * @param customer key-value ids (cookie ID or registered ID)
+     * @param tokens   tokens for projects - this one will be set to initialize GoogleAdvertising
      * @return Infinario instance
      */
     @SuppressWarnings("unused")
-    public static Infinario getInstance(Context context, String token, String target, Map<String, String> customer) {
+    public static Infinario getInstance(Context context, String target, Map<String, String> customer, String... tokens) {
         if (instance == null) {
-            synchronized (lockInstance){
-                if (instance == null){
-                    instance = new Infinario(context, token, target, customer);
+            synchronized (lockInstance) {
+                if (instance == null) {
+                    instance = new Infinario(context, target, customer, tokens);
                 }
             }
         }
@@ -164,73 +171,75 @@ public class Infinario {
      * Obtains instance of Infinario instance to work with and identifies the customer.
      *
      * @param context  application's context
-     * @param token    project token obtained from Infinario admin
      * @param target   Infinario API location
      * @param customer customer's registered ID
+     * @param tokens   tokens for projects - this one will be set to initialize GoogleAdvertising
      * @return Infinario instance
      */
     @SuppressWarnings("unused")
-    public static Infinario getInstance(Context context, String token, String target, String customer) {
-        return getInstance(context, token, target, translateId(customer));
+    public static Infinario getInstance(Context context, String target, String customer, String... tokens) {
+        return getInstance(context, translateId(customer), tokens);
     }
 
     /**
      * Obtains instance of Infinario instance to work with.
      *
-     * @param context  application's context
-     * @param token    project token obtained from Infinario admin
-     * @param target   Infinario API location
+     * @param context application's context
+     * @param target  Infinario API location
+     * @param tokens   tokens for projects - this one will be set to initialize GoogleAdvertising
      * @return Infinario instance
      */
     @SuppressWarnings("unused")
-    public static Infinario getInstance(Context context, String token, String target) {
-        return getInstance(context, token, target, (Map<String, String>) null);
+    public static Infinario getInstance(Context context, String target, String... tokens) {
+        return getInstance(context, target, (Map<String, String>) null, tokens);
     }
 
     /**
      * Obtains instance of Infinario instance to work with and identifies the customer.
      *
      * @param context  application's context
-     * @param token    project token obtained from Infinario admin
      * @param customer key-value ids (cookie ID or registered ID)
+     * @param tokens   tokens for projects - this one will be set to initialize GoogleAdvertising
      * @return Infinario instance
      */
     @SuppressWarnings("unused")
-    public static Infinario getInstance(Context context, String token, Map<String, String> customer) {
-        return getInstance(context, token, null, customer);
+    public static Infinario getInstance(Context context, Map<String, String> customer, String... tokens) {
+        return getInstance(context, null, customer, tokens);
     }
 
     /**
      * Obtains instance of Infinario instance to work with.
      *
-     * @param context  application's context
-     * @param token    project token obtained from Infinario admin
+     * @param context application's context
+     * @param tokens   tokens for projects - this one will be set to initialize GoogleAdvertising
      * @return Infinario instance
      */
     @SuppressWarnings("unused")
-    public static Infinario getInstance(Context context, String token) {
-        return getInstance(context, token, null, (Map<String, String>) null);
+    public static Infinario getInstance(Context context, String... tokens) {
+        return getInstance(context, null, (Map<String, String>) null, tokens);
     }
 
     /**
      * Identifies a customer with their registered ID.
      *
-     * @param customer key-value ids (registered ID)
+     * @param customer   key-value ids (registered ID)
      * @param properties key-value customer's properties
      */
     @SuppressWarnings("unused")
-    public void identify(Map<String, String> customer, Map<String, Object> properties) {
+    public void identify(Map<String, String> customer, Map<String,
+            Object> properties, String... tokens) {
+
         synchronized (lockPublic) {
             if (customer.containsKey(Contract.REGISTERED)) {
 
                 this.customer.put(Contract.REGISTERED, customer.get(Contract.REGISTERED));
 
-                if (!customer.get(Contract.REGISTERED).equals(preferences.getRegistredId())){
+                if (!customer.get(Contract.REGISTERED).equals(preferences.getRegistredId())) {
                     preferences.setRegistredId(customer.get(Contract.REGISTERED));
                     Map<String, Object> identificationProperties = Device.deviceProperties(preferences);
                     identificationProperties.put(Contract.REGISTERED, customer.get(Contract.REGISTERED));
-                    _track("identification", identificationProperties);
-                    _update(properties);
+                    _track("identification", identificationProperties, tokens);
+                    _update(properties, tokens);
                 }
             }
         }
@@ -239,12 +248,12 @@ public class Infinario {
     /**
      * Identifies a customer with their registered ID.
      *
-     * @param customer customer's registered ID
+     * @param customer   customer's registered ID
      * @param properties key-value customer's properties
      */
     @SuppressWarnings("unused")
-    public void identify(String customer, Map<String, Object> properties) {
-        identify(translateId(customer), properties);
+    public void identify(String customer, Map<String, Object> properties, String... tokens) {
+        identify(translateId(customer), properties, tokens);
     }
 
     /**
@@ -254,8 +263,8 @@ public class Infinario {
      * @param customer key-value ids (cookie ID or registered ID)
      */
     @SuppressWarnings("unused")
-    public void identify(Map<String, String> customer) {
-        identify(customer, new HashMap<String, Object>());
+    public void identify(Map<String, String> customer, String... tokens) {
+        identify(customer, new HashMap<String, Object>(), tokens);
     }
 
     /**
@@ -264,8 +273,8 @@ public class Infinario {
      * @param customer customer's registered ID
      */
     @SuppressWarnings("unused")
-    public void identify(String customer) {
-        identify(customer, new HashMap<String, Object>());
+    public void identify(String customer, String... tokens) {
+        identify(customer, new HashMap<String, Object>(), tokens);
     }
 
     /**
@@ -274,76 +283,84 @@ public class Infinario {
      * @param properties key-value customer's properties.
      * @return success of the operation
      */
-    public boolean update(Map<String, Object> properties) {
+    public boolean update(Map<String, Object> properties, String... tokens) {
         synchronized (lockPublic) {
-            return _update(properties);
+            return _update(properties, tokens);
         }
     }
 
-    private boolean _update(Map<String, Object> properties) {
-        if (commandManager.schedule(new Customer(customer, token, properties))) {
-            if (preferences.getAutomaticFlushing()) {
-                startFlushTimer();
+    private boolean _update(Map<String, Object> properties, String... tokens) {
+
+        for (String token : tokens) {
+            if (!commandManager.schedule(new Customer(customer, token, properties))) {
+                return true;
             }
-
-            return true;
         }
 
-        return false;
+        if (preferences.getAutomaticFlushing()) {
+            startFlushTimer();
+        }
+
+        return true;
     }
 
-    private void sessionStart(long timeStamp, Map<String, Object> properties){
+    private void sessionStart(long timeStamp, Map<String, Object> properties, String... tokens) {
         preferences.setSessionStart(timeStamp);
-        _track("session_start", mergeProperties(properties, -1), timeStamp);
+        _track("session_start", mergeProperties(properties, -1), timeStamp, tokens);
     }
 
-    private void sessionEnd(long timeStamp, long duration, Map<String, Object> properties){
-        _track("session_end", mergeProperties(properties, duration), timeStamp);
+    private void sessionEnd(long timeStamp, long duration,
+                            Map<String, Object> properties,
+                            String... tokens) {
+        _track("session_end", mergeProperties(properties, duration), timeStamp, tokens);
         preferences.setSessionStart(-1);
         preferences.setSessionEnd(-1, null);
     }
 
-    public void trackSessionStartImpl(){
-        trackSessionStartImpl(null);
+    public void trackSessionStartImpl(String... tokens) {
+        trackSessionStartImpl(null, tokens);
     }
 
-    public void trackSessionStartImpl(Map<String, Object> properties){
-        synchronized (lockPublic){
+    public void trackSessionStartImpl(Map<String, Object> properties, String... tokens) {
+        synchronized (lockPublic) {
             long now = (new Date()).getTime();
             long sessionEnd = preferences.getSessionEnd();
             long sessionStart = preferences.getSessionStart();
 
-            if (sessionHandler != null){
+            if (sessionHandler != null) {
                 sessionHandler.removeCallbacks(sessionEndRunnable);
             }
 
-            if (sessionEnd != -1){
-                if (now - sessionEnd > sessionTimeOut){
+            if (sessionEnd != -1) {
+                if (now - sessionEnd > sessionTimeOut) {
                     //Create session end
-                    sessionEnd(sessionEnd, (sessionEnd - sessionStart) / 1000L, preferences.getSessionEndProperties());
+                    sessionEnd(sessionEnd, (sessionEnd - sessionStart) / 1000L, preferences.getSessionEndProperties(), tokens);
                     //Create session start
-                    sessionStart(now, properties);
+                    sessionStart(now, properties, tokens);
                 } else {
                     //Continue in current session
                 }
-            } else  if (sessionStart == -1){
+            } else if (sessionStart == -1) {
                 //Create session start
-                sessionStart(now, properties);
+                sessionStart(now, properties, tokens);
             } else if (now - sessionStart > sessionTimeOut) {
                 //Create session start
-                sessionStart(now, properties);
+                sessionStart(now, properties, tokens);
             } else {
                 //Continue in current session
             }
         }
     }
 
-    public void trackSessionEndImpl(){
-        trackSessionEndImpl(null);
+    public void trackSessionEndImpl(String... tokens) {
+        trackSessionEndImpl(null, tokens);
     }
 
-    public void trackSessionEndImpl(Map<String, Object> properties){
-        synchronized (lockPublic){
+    public void trackSessionEndImpl(Map<String, Object> properties, String... tokens) {
+        synchronized (lockPublic) {
+
+            endSessionTokens = tokens;
+
             //Save session end with current timestamp and start count TIMEOUT
             preferences.setSessionEnd((new Date()).getTime(), properties);
             sessionHandler.postDelayed(sessionEndRunnable, sessionTimeOut);
@@ -351,52 +368,52 @@ public class Infinario {
     }
 
     public void setSessionTimeOut(long value) {
-        synchronized (lockPublic){
+        synchronized (lockPublic) {
             sessionTimeOut = value;
         }
     }
 
-    public void trackSessionStart(){
-        trackSessionStart(null);
+    public void trackSessionStart(String... tokens) {
+        trackSessionStart(null, tokens);
     }
 
-    public void trackSessionStart(Map<String, Object> properties){
+    public void trackSessionStart(Map<String, Object> properties, String... tokens) {
         int _sessionCounter = 0;
         synchronized (lockPublic) {
             sessionCounter += 1;
             _sessionCounter = sessionCounter;
         }
 
-        if (_sessionCounter == 1){
-            trackSessionStartImpl(properties);
+        if (_sessionCounter == 1) {
+            trackSessionStartImpl(properties, tokens);
         }
     }
 
-    public void trackSessionEnd(){
-        trackSessionEnd(null);
+    public void trackSessionEnd(String... tokens) {
+        trackSessionEnd(null, tokens);
     }
 
-    public void trackSessionEnd(Map<String, Object> properties){
+    public void trackSessionEnd(Map<String, Object> properties, String... tokens) {
         int _sessionCounter = 0;
-        synchronized (lockPublic){
-            if (sessionCounter > 0){
+        synchronized (lockPublic) {
+            if (sessionCounter > 0) {
                 sessionCounter -= 1;
             }
             _sessionCounter = sessionCounter;
         }
 
         if (_sessionCounter == 0) {
-            trackSessionEndImpl(properties);
+            trackSessionEndImpl(properties, tokens);
         }
     }
 
     private Map<String, Object> mergeProperties(Map<String, Object> properties, long duration) {
         Map<String, Object> deviceProperties = Device.deviceProperties(preferences);
         String appVersionName = preferences.getAppVersionName();
-        if (appVersionName != null){
+        if (appVersionName != null) {
             deviceProperties.put("app_version", appVersionName);
         }
-        if (duration != -1){
+        if (duration != -1) {
             deviceProperties.put("duration", duration);
         }
         if (properties != null) {
@@ -414,26 +431,29 @@ public class Infinario {
      * @param timestamp  event's timestamp in seconds
      * @return success of the operation
      */
-    public boolean track(String type, Map<String, Object> properties, Long timestamp) {
+    public boolean track(String type, Map<String, Object> properties, Long timestamp, String... tokens) {
         synchronized (lockPublic) {
-            return _track(type, properties, timestamp);
+            return _track(type, properties, timestamp, tokens);
         }
     }
 
-    private boolean _track(String type, Map<String, Object> properties, Long timestamp) {
-        if (commandManager.schedule(new Event(customer, token, type, properties, timestamp))) {
-            if (preferences.getAutomaticFlushing()) {
-                startFlushTimer();
+    private boolean _track(String type, Map<String, Object> properties, Long timestamp, String... tokens) {
+
+        for (String token : tokens) {
+            if (!commandManager.schedule(new Event(customer, token, type, properties, timestamp))) {
+                return false;
             }
-
-            return true;
         }
 
-        return false;
+        if (preferences.getAutomaticFlushing()) {
+            startFlushTimer();
+        }
+
+        return true;
     }
 
-    private boolean _track(String type, Map<String, Object> properties) {
-        return _track(type, properties, null);
+    private boolean _track(String type, Map<String, Object> properties, String... tokens) {
+        return _track(type, properties, null, tokens);
     }
 
     /**
@@ -442,8 +462,8 @@ public class Infinario {
      * @param type event's type
      * @return success of the operation
      */
-    public boolean track(String type) {
-        return track(type, null, null);
+    public boolean track(String type, String... tokens) {
+        return track(type, null, null, tokens);
     }
 
     /**
@@ -453,19 +473,19 @@ public class Infinario {
      * @param properties event's properties
      * @return success of the operation
      */
-    public boolean track(String type, Map<String, Object> properties) {
-        return track(type, properties, null);
+    public boolean track(String type, Map<String, Object> properties, String... tokens) {
+        return track(type, properties, null, tokens);
     }
 
     /**
      * Tracks an event for a customer. Cannot be called prior to the identification.
      *
-     * @param type event's type
+     * @param type      event's type
      * @param timestamp event's timestamp in seconds
      * @return success of the operation
      */
-    public boolean track(String type, Long timestamp) {
-        return track(type, null, timestamp);
+    public boolean track(String type, Long timestamp, String... tokens) {
+        return track(type, null, timestamp, tokens);
     }
 
     @SuppressWarnings("unused")
@@ -478,14 +498,14 @@ public class Infinario {
     }
 
     /**
-     * @deprecated  As of release 1.1.0, replaced by {@link #trackGooglePurchases(int resultCode, Intent data)}
+     * @deprecated As of release 1.1.0, replaced by {@link #trackGooglePurchases(int resultCode, Intent data)}
      */
     @Deprecated
-    public void trackPurchases(int resultCode, Intent data){
-        this.trackGooglePurchases(resultCode, data);
+    public void trackPurchases(int resultCode, Intent data, String... tokens) {
+        this.trackGooglePurchases(resultCode, data, tokens);
     }
 
-    public void trackGooglePurchases(int resultCode, Intent data) {
+    public void trackGooglePurchases(int resultCode, Intent data, String... tokens) {
         synchronized (lockPublic) {
             if (!iabHelper.setupDone() || data == null) {
                 return;
@@ -506,9 +526,9 @@ public class Infinario {
                     final Long purchaseTime = o.optLong("purchaseTime");
                     final String purchaseToken = o.optString("purchaseToken");
 
-                    new AsyncTask<Void, Void, Void>() {
+                    new AsyncTask<String, Void, Void>() {
                         @Override
-                        protected Void doInBackground(Void... params) {
+                        protected Void doInBackground(String... params) {
                             synchronized (lockPublic) {
                                 Log.d(Contract.TAG, "Purchased item " + productId + " at " + purchaseTime);
 
@@ -520,8 +540,7 @@ public class Infinario {
                                     if (details == null && iabHelper.subscriptionsSupported()) {
                                         details = iabHelper.querySkuDetails("subs", productId);
                                     }
-                                }
-                                catch (RemoteException | JSONException e) {
+                                } catch (RemoteException | JSONException e) {
                                     return null;
                                 }
 
@@ -535,36 +554,35 @@ public class Infinario {
                                     properties.put("product_token", purchaseToken);
                                     properties.put("payment_system", "Google Play Store");
 
-                                    _track("payment", properties, purchaseTime);
+                                    _track("payment", properties, purchaseTime, params);
                                 }
 
                                 return null;
                             }
                         }
-                    }.execute(null, null, null);
-                }
-                catch (JSONException e) {
+                    }.execute(tokens);
+                } catch (JSONException e) {
                     Log.e(Contract.TAG, "Cannot parse purchaseData");
                 }
             }
         }
     }
 
-    public void loadAmazonProduct(JSONObject amazonJsonProductDataResponse){
+    public void loadAmazonProduct(JSONObject amazonJsonProductDataResponse) {
         synchronized (lockPublic) {
             amazonProduct = amazonJsonProductDataResponse;
         }
     }
 
-    public void trackAmazonPurchases(JSONObject amazonJsonPurchaseResponse){
+    public void trackAmazonPurchases(JSONObject amazonJsonPurchaseResponse, String... tokens) {
         synchronized (lockPublic) {
             Map<String, Object> properties = Device.deviceProperties(preferences);
             properties.put("payment_system", "Amazon Store");
             try {
                 String sku = amazonJsonPurchaseResponse.getJSONObject("receipt").getString("sku");
-                if (amazonProduct != null){
+                if (amazonProduct != null) {
                     try {
-                        String [] priceCurrency = splitPriceAndCurrency(amazonProduct.getJSONObject("productData").getJSONObject(sku).getString("price"));
+                        String[] priceCurrency = splitPriceAndCurrency(amazonProduct.getJSONObject("productData").getJSONObject(sku).getString("price"));
                         properties.put("gross_amount", priceCurrency[1]);
                         properties.put("currency", priceCurrency[0]);
                         properties.put("product_title", amazonProduct.getJSONObject("productData").getJSONObject(sku).getString("title"));
@@ -575,71 +593,72 @@ public class Infinario {
                 properties.put("product_id", sku);
                 properties.put("user_id", amazonJsonPurchaseResponse.getJSONObject("userData").getString("userId"));
                 properties.put("receipt", amazonJsonPurchaseResponse.getJSONObject("receipt").getString("receiptId"));
-                _track("payment", properties);
+                _track("payment", properties, tokens);
             } catch (JSONException e) {
                 Log.e(Contract.TAG, "Cannot parse purchaseData from Amazon Store");
             }
         }
     }
 
-    public void trackVirtualPayment(String currency, int amount, String itemName, String itemType){
+    public void trackVirtualPayment(String currency, int amount, String itemName,
+                                    String itemType, String... tokens) {
         synchronized (lockPublic) {
             Map<String, Object> virtualPayment = Device.deviceProperties(preferences);
             virtualPayment.put("currency", currency);
             virtualPayment.put("amount", amount);
             virtualPayment.put("item_name", itemName);
             virtualPayment.put("item_type", itemType);
-            _track("virtual_payment", virtualPayment);
+            _track("virtual_payment", virtualPayment, tokens);
         }
     }
 
-    private void trackLogError(String tag, String message){
-        trackLog("log_error", tag, message, null);
+    private void trackLogError(String tag, String message, String... tokens) {
+        trackLog("log_error", tag, message, null, tokens);
     }
 
-    private void trackLogError(String tag, String message, HashMap<String, Object> properties){
-        trackLog("log_error", tag, message, properties);
+    private void trackLogError(String tag, String message, HashMap<String, Object> properties, String... tokens) {
+        trackLog("log_error", tag, message, properties, tokens);
     }
 
-    private void trackLogWarning(String tag, String message){
-        trackLog("log_warning", tag, message, null);
+    private void trackLogWarning(String tag, String message, String... tokens) {
+        trackLog("log_warning", tag, message, null, tokens);
     }
 
-    private void trackLogWarning(String tag, String message, HashMap<String, Object> properties){
-        trackLog("log_warning", tag, message, properties);
+    private void trackLogWarning(String tag, String message, HashMap<String, Object> properties, String... tokens) {
+        trackLog("log_warning", tag, message, properties, tokens);
     }
 
-    private void trackLogDebug(String tag, String message){
-        trackLog("log_debug", tag, message, null);
+    private void trackLogDebug(String tag, String message, String... tokens) {
+        trackLog("log_debug", tag, message, null, tokens);
     }
 
-    private void trackLogDebug(String tag, String message, HashMap<String, Object> properties){
-        trackLog("log_debug", tag, message, properties);
+    private void trackLogDebug(String tag, String message, HashMap<String, Object> properties, String... tokens) {
+        trackLog("log_debug", tag, message, properties, tokens);
     }
 
-    private void trackLog(String type, String tag, String message, HashMap<String, Object> properties){
+    private void trackLog(String type, String tag, String message, HashMap<String, Object> properties, String... tokens) {
         HashMap<String, Object> logMessage = new HashMap<>();
         logMessage.put("tag", tag);
         logMessage.put("message", message);
-        if (properties != null){
+        if (properties != null) {
             logMessage.putAll(properties);
         }
-        track(type, logMessage);
+        track(type, logMessage, tokens);
     }
 
     /**
      * Return name of segment
      */
-    public void getCurrentSegment(final String segmentationId, final String projectSecretToken, final SegmentListener listener){
+    public void getCurrentSegment(final String segmentationId, final String projectSecretToken, final SegmentListener listener) {
         synchronized (lockPublic) {
-            if (Preferences.get(context).getTarget().startsWith("https")){
-                new AsyncTask<Void, Void, JSONObject>(){
+            if (Preferences.get(context).getTarget().startsWith("https")) {
+                new AsyncTask<Void, Void, JSONObject>() {
 
                     @Override
                     protected JSONObject doInBackground(Void... params) {
                         HttpHelper http;
 
-                        synchronized (lockPublic){
+                        synchronized (lockPublic) {
                             http = new HttpHelper(Preferences.get(context).getTarget(), userAgent)
                                     .addRequestProperty("X-Infinario-Secret", projectSecretToken)
                                     .setTimeout(2000);
@@ -666,9 +685,9 @@ public class Infinario {
                     }
 
                     @Override
-                    protected void onPostExecute(JSONObject result){
-                        if (result != null){
-                            if (result.optBoolean("success")){
+                    protected void onPostExecute(JSONObject result) {
+                        if (result != null) {
+                            if (result.optBoolean("success")) {
                                 listener.onSegmentReceive(true, new InfinarioSegment().setName(result.optString("segment")), null);
                             } else {
                                 listener.onSegmentReceive(false, null, "Unsuccesfull response");
@@ -715,22 +734,22 @@ public class Infinario {
     }
 
     /**
-     * @deprecated  As of release 1.1.0, replaced by {@link #enableGooglePushNotifications(String senderId, int iconDrawable)}
+     * @deprecated As of release 1.1.0, replaced by {@link #enableGooglePushNotifications(String senderId, int iconDrawable)}
      */
     @Deprecated
-    public void enablePushNotifications(String senderId, int iconDrawable){
-        this.enableGooglePushNotifications(senderId, iconDrawable);
+    public void enablePushNotifications(String senderId, int iconDrawable, String... tokens) {
+        this.enableGooglePushNotifications(senderId, iconDrawable, tokens);
     }
 
     /**
      * Enables receiving of google push notifications to the app from an Infinario scenario. Push
      * notifications cannot be enabled prior to the identification.
      *
-     * @param senderId sender ID or project number obtained from Google Developers Console
+     * @param senderId     sender ID or project number obtained from Google Developers Console
      * @param iconDrawable icon for the notifications, e.g. R.drawable.icon
      */
     @SuppressWarnings("unused")
-    public void enableGooglePushNotifications(String senderId, int iconDrawable) {
+    public void enableGooglePushNotifications(String senderId, int iconDrawable, String... tokens) {
         synchronized (lockPublic) {
             preferences.setGooglePushNotifications(true);
 
@@ -743,23 +762,22 @@ public class Infinario {
                 preferences.setIcon(iconDrawable);
 
                 if (registrationId.isEmpty()) {
-                    registerInBackground();
+                    registerInBackground(tokens);
                 } else {
                     Log.i(Contract.TAG, "Already registered");
                 }
-            }
-            else {
+            } else {
                 Log.i(Contract.TAG, "No valid Google Play Services APK found.");
             }
         }
     }
 
     /**
-     * @deprecated  As of release 1.1.0, replaced by {@link #enableGooglePushNotifications(String senderId)}
+     * @deprecated As of release 1.1.0, replaced by {@link #enableGooglePushNotifications(String senderId)}
      */
     @Deprecated
-    public void enablePushNotifications(String senderId){
-        this.enableGooglePushNotifications(senderId);
+    public void enablePushNotifications(String senderId, String... tokens) {
+        this.enableGooglePushNotifications(senderId, tokens);
     }
 
     /**
@@ -768,28 +786,28 @@ public class Infinario {
      * @param senderId sender ID or project number obtained from Google Developers Console
      */
     @SuppressWarnings("unused")
-    public void enableGooglePushNotifications(String senderId) {
-        enableGooglePushNotifications(senderId, getDrawableId("infinario_notification_icon"));
+    public void enableGooglePushNotifications(String senderId, String... tokens) {
+        enableGooglePushNotifications(senderId, getDrawableId("infinario_notification_icon"), tokens);
     }
 
     /**
-     * @deprecated  As of release 1.1.0, replaced by {@link #enableGooglePushNotifications(String senderId, String nameDrawable)}
+     * @deprecated As of release 1.1.0, replaced by {@link #enableGooglePushNotifications(String senderId, String nameDrawable)}
      */
     @Deprecated
-    public void enablePushNotifications(String senderId, String nameDrawable){
-        this.enableGooglePushNotifications(senderId, nameDrawable);
+    public void enablePushNotifications(String senderId, String nameDrawable, String... tokens) {
+        this.enableGooglePushNotifications(senderId, nameDrawable, tokens);
     }
 
     @SuppressWarnings("unused")
-    public void enableGooglePushNotifications(String senderId, String nameDrawable) {
-        enableGooglePushNotifications(senderId, getDrawableId(nameDrawable));
+    public void enableGooglePushNotifications(String senderId, String nameDrawable, String... tokens) {
+        enableGooglePushNotifications(senderId, getDrawableId(nameDrawable), tokens);
     }
 
     /**
-     * @deprecated  As of release 1.1.0, replaced by {@link #disableGooglePushNotifications()}
+     * @deprecated As of release 1.1.0, replaced by {@link #disableGooglePushNotifications()}
      */
     @Deprecated
-    public void disablePushNotifications(){
+    public void disablePushNotifications() {
         this.disableGooglePushNotifications();
     }
 
@@ -807,7 +825,7 @@ public class Infinario {
      * Handles intent (GCM message) from the GcmBroadcastReceiver for all Infinario instances.
      *
      * @param context application's context
-     * @param intent received intent from a broadcast receiver.
+     * @param intent  received intent from a broadcast receiver.
      */
     public static void handleGooglePushNotification(Context context, Intent intent) {
         Preferences preferences = Preferences.get(context);
@@ -819,10 +837,10 @@ public class Infinario {
             String senderId = preferences.getSenderId();
 
             if (!extras.isEmpty() &&
-                senderId != null &&
-                !senderId.equals("") &&
-                GoogleCloudMessaging.MESSAGE_TYPE_MESSAGE.equals(messageType) &&
-                extras.getString("from").equals(senderId)) {
+                    senderId != null &&
+                    !senderId.equals("") &&
+                    GoogleCloudMessaging.MESSAGE_TYPE_MESSAGE.equals(messageType) &&
+                    extras.getString("from").equals(senderId)) {
 
                 Log.d(Contract.TAG, "Received data: " + intent.getExtras().toString());
                 sendNotification(context, intent.getExtras(), preferences.getIcon());
@@ -839,13 +857,14 @@ public class Infinario {
 
     /**
      * Translates String registered ID to Map<String, String> compound ID
+     *
      * @param customer customer's registered ID
      * @return key-value customer IDs
      */
     private static Map<String, String> translateId(String customer) {
         Map<String, String> customer_ids = new HashMap<>();
         customer_ids.put(Contract.REGISTERED, customer);
-       return customer_ids;
+        return customer_ids;
     }
 
     /**
@@ -879,14 +898,14 @@ public class Infinario {
      * Stores the registration ID and the app versionCode in the application's
      * shared preferences.
      */
-    private void registerInBackground() {
-        new AsyncTask<Void, Void, Void>() {
+    private void registerInBackground(String... tokens) {
+        new AsyncTask<String, Void, Void>() {
             @Override
-            protected Void doInBackground(Void... params) {
+            protected Void doInBackground(String... params) {
                 try {
                     registrationId = gcm.register(preferences.getSenderId());
 
-                    sendRegistrationIdToBackend();
+                    sendRegistrationIdToBackend(params);
                     preferences.setRegistrationId(registrationId);
                 } catch (IOException ex) {
                     Log.e(Contract.TAG, "Error :" + ex.getMessage());
@@ -897,25 +916,25 @@ public class Infinario {
 
                 return null;
             }
-        }.execute(null, null, null);
+        }.execute(tokens);
     }
 
     /**
      * Sends the registration ID to the server over HTTP, so it can send
      * messages to the app.
      */
-    private void sendRegistrationIdToBackend() {
+    private void sendRegistrationIdToBackend(String... tokens) {
         Log.i(Contract.TAG, "Sending registration ID to backend");
         Map<String, Object> properties = new HashMap<>();
         properties.put(Contract.DB_GOOGLE_REGISTRATION_ID, registrationId);
-        _update(properties);
+        _update(properties, tokens);
     }
 
     /**
      * Displays a notification (on locked screen or in notification area).
      *
-     * @param context application's context
-     * @param data data from intent
+     * @param context      application's context
+     * @param data         data from intent
      * @param iconDrawable icon for the notifications, e.g. R.drawable.icon
      */
     private static void sendNotification(Context context, Bundle data, int iconDrawable) {
@@ -945,12 +964,12 @@ public class Infinario {
     /**
      * @return return drawable id by string
      */
-    private int getDrawableId(String nameDrawable){
+    private int getDrawableId(String nameDrawable) {
         try {
             return context.getResources().getIdentifier(nameDrawable, "drawable", context.getPackageName());
         } catch (Exception e) {
             Log.e(Contract.TAG, "Cannot find drawable with name " + nameDrawable);
-            if (!nameDrawable.equals("infinario_notification_icon")){
+            if (!nameDrawable.equals("infinario_notification_icon")) {
                 return getDrawableId("infinario_notification_icon");
             } else {
                 return -1;
@@ -961,7 +980,7 @@ public class Infinario {
     /**
      * initializes google advertising ID
      */
-    private void initializeGoogleAdvertisingId(){
+    private void initializeGoogleAdvertisingId(final String... tokens) {
         new Thread(new Runnable() {
             public void run() {
                 try {
@@ -969,9 +988,9 @@ public class Infinario {
                     preferences.setGoogleAdvertisingId(adInfo.getId());
 
                     synchronized (lockPublic) {
-                        HashMap<String,Object> advId = new HashMap<String, Object>();
-                        advId.put(Contract.PROPERTY_GOOGLE_ADV_ID,adInfo.getId());
-                        _update(advId);
+                        HashMap<String, Object> advId = new HashMap<String, Object>();
+                        advId.put(Contract.PROPERTY_GOOGLE_ADV_ID, adInfo.getId());
+                        _update(advId, tokens);
                     }
                 } catch (Exception e) {
                     Log.e(Contract.TAG, "Cannot initialize google advertising ID");
@@ -983,23 +1002,23 @@ public class Infinario {
     /**
      * Split string where is Price and Currency together.
      */
-    private String[] splitPriceAndCurrency(String price){
+    private String[] splitPriceAndCurrency(String price) {
         StringBuilder currency = new StringBuilder();
-        for (int i=0;i<price.length();i++){
-            if (!Character.isDigit(price.charAt(i))){
+        for (int i = 0; i < price.length(); i++) {
+            if (!Character.isDigit(price.charAt(i))) {
                 currency.append(price.charAt(i));
             } else {
                 break;
             }
         }
-        return new String[]{currency.toString(),price.substring(currency.length())};
+        return new String[]{currency.toString(), price.substring(currency.length())};
     }
 
     /**
      * Check if device is mobile or tablet
      */
     private void initializeDeviceType() {
-        try{
+        try {
             boolean device_large = ((context.getResources().getConfiguration().screenLayout &
                     Configuration.SCREENLAYOUT_SIZE_MASK) >=
                     Configuration.SCREENLAYOUT_SIZE_LARGE);
@@ -1011,7 +1030,7 @@ public class Infinario {
                 Log.d(Contract.TAG, "Detect mobile");
                 preferences.setDeviceType("mobile");
             }
-        } catch (Exception e){
+        } catch (Exception e) {
             Log.e(Contract.TAG, "Cannot initialize device type");
         }
     }
@@ -1019,22 +1038,22 @@ public class Infinario {
     /**
      * Listnener for segmentation
      */
-    public interface SegmentListener{
+    public interface SegmentListener {
         void onSegmentReceive(boolean wasSuccessful, InfinarioSegment segment, String error);
     }
 
-    private void startFlushTimer(){
-        synchronized (lockFlushTimer){
-            if (sessionHandler != null){
+    private void startFlushTimer() {
+        synchronized (lockFlushTimer) {
+            if (sessionHandler != null) {
                 stopFlushTimer();
                 sessionHandler.postDelayed(sessionFlushRunnable, Contract.FLUSH_DELAY);
             }
         }
     }
 
-    private void stopFlushTimer(){
-        synchronized (lockFlushTimer){
-            if(sessionHandler != null){
+    private void stopFlushTimer() {
+        synchronized (lockFlushTimer) {
+            if (sessionHandler != null) {
                 sessionHandler.removeCallbacks(sessionFlushRunnable);
             }
         }
