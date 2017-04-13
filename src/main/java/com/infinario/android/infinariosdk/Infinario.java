@@ -150,73 +150,20 @@ public class Infinario {
      *
      * @param context  application's context
      * @param target   Infinario API location
-     * @param customer key-value ids (cookie ID or registered ID)
-     * @param tokens   tokens for projects - this one will be set to initialize GoogleAdvertising
-     * @return Infinario instance
-     */
-    @SuppressWarnings("unused")
-    public static Infinario getInstance(Context context, String target, Map<String, String> customer, String... tokens) {
-        if (instance == null) {
-            synchronized (lockInstance) {
-                if (instance == null) {
-                    instance = new Infinario(context, target, customer, tokens);
-                }
-            }
-        }
-
-        return instance;
-    }
-
-    /**
-     * Obtains instance of Infinario instance to work with and identifies the customer.
-     *
-     * @param context  application's context
-     * @param target   Infinario API location
-     * @param customer customer's registered ID
-     * @param tokens   tokens for projects - this one will be set to initialize GoogleAdvertising
-     * @return Infinario instance
-     */
-    @SuppressWarnings("unused")
-    public static Infinario getInstance(Context context, String target, String customer, String... tokens) {
-        return getInstance(context, translateId(customer), tokens);
-    }
-
-    /**
-     * Obtains instance of Infinario instance to work with.
-     *
-     * @param context application's context
-     * @param target  Infinario API location
      * @param tokens   tokens for projects - this one will be set to initialize GoogleAdvertising
      * @return Infinario instance
      */
     @SuppressWarnings("unused")
     public static Infinario getInstance(Context context, String target, String... tokens) {
-        return getInstance(context, target, (Map<String, String>) null, tokens);
-    }
+        if (instance == null) {
+            synchronized (lockInstance) {
+                if (instance == null) {
+                    instance = new Infinario(context, target, (Map<String, String>) null, tokens);
+                }
+            }
+        }
 
-    /**
-     * Obtains instance of Infinario instance to work with and identifies the customer.
-     *
-     * @param context  application's context
-     * @param customer key-value ids (cookie ID or registered ID)
-     * @param tokens   tokens for projects - this one will be set to initialize GoogleAdvertising
-     * @return Infinario instance
-     */
-    @SuppressWarnings("unused")
-    public static Infinario getInstance(Context context, Map<String, String> customer, String... tokens) {
-        return getInstance(context, null, customer, tokens);
-    }
-
-    /**
-     * Obtains instance of Infinario instance to work with.
-     *
-     * @param context application's context
-     * @param tokens   tokens for projects - this one will be set to initialize GoogleAdvertising
-     * @return Infinario instance
-     */
-    @SuppressWarnings("unused")
-    public static Infinario getInstance(Context context, String... tokens) {
-        return getInstance(context, null, (Map<String, String>) null, tokens);
+        return instance;
     }
 
     /**
