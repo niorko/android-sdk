@@ -79,7 +79,7 @@ public class Infinario {
     private String[] endSessionTokens;
 
     private Infinario(Context context, String target,
-                      Map<String, String> customer, String... tokens) {
+                      Map<String, String> customer) {
 
         this.context = context.getApplicationContext();
 
@@ -91,10 +91,6 @@ public class Infinario {
 
         if (null != target) {
             preferences.setTarget(target.replaceFirst("/*$", ""));
-        }
-
-        if (preferences.getGoogleAdvertisingId().isEmpty()) {
-            initializeGoogleAdvertisingId(tokens);
         }
 
         if (preferences.getDeviceType().isEmpty()) {
@@ -150,15 +146,14 @@ public class Infinario {
      *
      * @param context  application's context
      * @param target   Infinario API location
-     * @param tokens   tokens for projects - this one will be set to initialize GoogleAdvertising
      * @return Infinario instance
      */
     @SuppressWarnings("unused")
-    public static Infinario getInstance(Context context, String target, String... tokens) {
+    public static Infinario getInstance(Context context, String target) {
         if (instance == null) {
             synchronized (lockInstance) {
                 if (instance == null) {
-                    instance = new Infinario(context, target, (Map<String, String>) null, tokens);
+                    instance = new Infinario(context, target, (Map<String, String>) null);
                 }
             }
         }
@@ -444,14 +439,6 @@ public class Infinario {
         }
     }
 
-    /**
-     * @deprecated As of release 1.1.0, replaced by {@link #trackGooglePurchases(int resultCode, Intent data)}
-     */
-    @Deprecated
-    public void trackPurchases(int resultCode, Intent data, String... tokens) {
-        this.trackGooglePurchases(resultCode, data, tokens);
-    }
-
     public void trackGooglePurchases(int resultCode, Intent data, String... tokens) {
         synchronized (lockPublic) {
             if (!iabHelper.setupDone() || data == null) {
@@ -681,14 +668,6 @@ public class Infinario {
     }
 
     /**
-     * @deprecated As of release 1.1.0, replaced by {@link #enableGooglePushNotifications(String senderId, int iconDrawable)}
-     */
-    @Deprecated
-    public void enablePushNotifications(String senderId, int iconDrawable, String... tokens) {
-        this.enableGooglePushNotifications(senderId, iconDrawable, tokens);
-    }
-
-    /**
      * Enables receiving of google push notifications to the app from an Infinario scenario. Push
      * notifications cannot be enabled prior to the identification.
      *
@@ -720,14 +699,6 @@ public class Infinario {
     }
 
     /**
-     * @deprecated As of release 1.1.0, replaced by {@link #enableGooglePushNotifications(String senderId)}
-     */
-    @Deprecated
-    public void enablePushNotifications(String senderId, String... tokens) {
-        this.enableGooglePushNotifications(senderId, tokens);
-    }
-
-    /**
      * Enables receiving of google push notifications to the app from an Infinario scenario.
      *
      * @param senderId sender ID or project number obtained from Google Developers Console
@@ -737,25 +708,9 @@ public class Infinario {
         enableGooglePushNotifications(senderId, getDrawableId("infinario_notification_icon"), tokens);
     }
 
-    /**
-     * @deprecated As of release 1.1.0, replaced by {@link #enableGooglePushNotifications(String senderId, String nameDrawable)}
-     */
-    @Deprecated
-    public void enablePushNotifications(String senderId, String nameDrawable, String... tokens) {
-        this.enableGooglePushNotifications(senderId, nameDrawable, tokens);
-    }
-
     @SuppressWarnings("unused")
     public void enableGooglePushNotifications(String senderId, String nameDrawable, String... tokens) {
         enableGooglePushNotifications(senderId, getDrawableId(nameDrawable), tokens);
-    }
-
-    /**
-     * @deprecated As of release 1.1.0, replaced by {@link #disableGooglePushNotifications()}
-     */
-    @Deprecated
-    public void disablePushNotifications() {
-        this.disableGooglePushNotifications();
     }
 
     /**
@@ -922,28 +877,6 @@ public class Infinario {
                 return -1;
             }
         }
-    }
-
-    /**
-     * initializes google advertising ID
-     */
-    private void initializeGoogleAdvertisingId(final String... tokens) {
-        new Thread(new Runnable() {
-            public void run() {
-                try {
-                    AdvertisingIdClient.Info adInfo = AdvertisingIdClient.getAdvertisingIdInfo(context);
-                    preferences.setGoogleAdvertisingId(adInfo.getId());
-
-                    synchronized (lockPublic) {
-                        HashMap<String, Object> advId = new HashMap<String, Object>();
-                        advId.put(Contract.PROPERTY_GOOGLE_ADV_ID, adInfo.getId());
-                        _update(advId, tokens);
-                    }
-                } catch (Exception e) {
-                    Log.e(Contract.TAG, "Cannot initialize google advertising ID");
-                }
-            }
-        }).start();
     }
 
     /**
