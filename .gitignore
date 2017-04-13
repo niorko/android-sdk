@@ -1,6 +1,8 @@
-.gradle
-/local.properties
-.idea
-.DS_Store
 /build
-gradle.properties
+*.iml
+local.properties
+/.gradle
+/.idea
+/captures
+/infer-out
+**/.inferConfig
