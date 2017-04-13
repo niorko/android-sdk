@@ -1,11 +1,12 @@
+apply from: '../dependencies.gradle'
 apply plugin: 'com.android.library'
 
 android {
-    compileSdkVersion 25
-    buildToolsVersion "21.1.2"
+    compileSdkVersion compileSdkVersionVar
+    buildToolsVersion buildToolsVersionVar
     defaultConfig {
         minSdkVersion 15
-        targetSdkVersion 25
+        targetSdkVersion targetSdkVersionVar
         versionCode 1
         versionName "1.0"
     }
@@ -31,6 +32,6 @@ buildscript {
 }
 
 dependencies {
-    compile 'com.google.android.gms:play-services-gcm:10.0.1'
-    compile 'com.google.android.gms:play-services-ads:10.0.1'
+    compile "com.google.android.gms:play-services-gcm:$playServicesVersion"
+    compile "com.google.android.gms:play-services-ads:$playServicesVersion"
 }
